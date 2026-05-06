@@ -8,10 +8,85 @@ import {
 import { toast } from 'sonner';
 import {
   Settings as SettingsIcon, User, Save, MapPin, CreditCard,
-  Shield, RotateCcw, HeartHandshake, Mail, Home
+  RotateCcw, HeartHandshake, Mail, Home
 } from 'lucide-react';
 import { getCantonFromPLZ } from '@/utils/chPlz';
 import { cn } from '@/lib/utils';
+
+function EditableField({ label, value, onChange, placeholder, type = 'text', tooltip }: {
+  label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; tooltip?: string;
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          {label}
+        </label>
+        {tooltip && (
+          <div className="relative group">
+            <div className="w-3.5 h-3.5 rounded-full bg-muted-foreground/20 text-muted-foreground flex items-center justify-center cursor-help text-[9px] font-bold leading-none select-none">
+              i
+            </div>
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-popover border text-popover-foreground text-xs rounded-lg px-3 py-2 shadow-lg
+              opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50 leading-relaxed">
+              {tooltip}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-popover" />
+            </div>
+          </div>
+        )}
+      </div>
+      <input
+        type={type}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-3.5 py-2.5 rounded-xl border bg-background text-sm font-medium
+          shadow-sm shadow-black/5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+      />
+    </div>
+  );
+}
+
+function Section({ title, subtitle, icon: Icon, children }: {
+  title: string;
+  subtitle?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border bg-gradient-to-b from-background to-muted/10 p-4 space-y-3 shadow-sm">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-2xl bg-primary/10 border border-primary/10 flex items-center justify-center">
+            <Icon className="w-4.5 h-4.5 text-primary" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold leading-tight">{title}</p>
+            {subtitle && <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{subtitle}</p>}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function InfoRow({ icon: Icon, label, value, iconColor = 'text-muted-foreground' }: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  iconColor?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between py-3 px-4 border-b border-border/50 last:border-b-0 bg-background/50">
+      <div className="flex items-center gap-3">
+        <Icon className={`w-4 h-4 ${iconColor}`} />
+        <span className="text-sm font-medium text-muted-foreground">{label}</span>
+      </div>
+      <span className="text-sm font-bold text-foreground">{value}</span>
+    </div>
+  );
+}
 
 export function SettingsPage() {
   const { user, employer, employerAccess, refreshProfile, signOut } = useAuth();
@@ -333,79 +408,6 @@ export function SettingsPage() {
     </div>
   );
 
-  const EditableField = ({ label, value, onChange, placeholder, type = 'text', tooltip }: {
-    label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string; tooltip?: string;
-  }) => (
-    <div>
-      <div className="flex items-center gap-1.5 mb-1.5">
-        <label className="block text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          {label}
-        </label>
-        {tooltip && (
-          <div className="relative group">
-            <div className="w-3.5 h-3.5 rounded-full bg-muted-foreground/20 text-muted-foreground flex items-center justify-center cursor-help text-[9px] font-bold leading-none select-none">
-              i
-            </div>
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 bg-popover border text-popover-foreground text-xs rounded-lg px-3 py-2 shadow-lg
-              opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity duration-150 z-50 leading-relaxed">
-              {tooltip}
-              <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-popover" />
-            </div>
-          </div>
-        )}
-      </div>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        className="w-full px-3.5 py-2.5 rounded-xl border bg-background text-sm font-medium
-          shadow-sm shadow-black/5 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-      />
-    </div>
-  );
-
-  const Section = ({ title, subtitle, icon: Icon, children }: {
-    title: string;
-    subtitle?: string;
-    icon: typeof User;
-    children: React.ReactNode;
-  }) => (
-    <div className="rounded-2xl border bg-gradient-to-b from-background to-muted/10 p-4 space-y-3 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-2xl bg-primary/10 border border-primary/10 flex items-center justify-center">
-            <Icon className="w-4.5 h-4.5 text-primary" />
-          </div>
-          <div>
-            <p className="text-sm font-semibold leading-tight">{title}</p>
-            {subtitle && <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{subtitle}</p>}
-          </div>
-        </div>
-      </div>
-      <div className="space-y-3">{children}</div>
-    </div>
-  );
-
-  const InfoRow = ({
-    icon: Icon,
-    label,
-    value,
-    iconColor = 'text-muted-foreground',
-  }: {
-    icon: typeof User;
-    label: string;
-    value: string;
-    iconColor?: string;
-  }) => (
-    <div className="flex items-center justify-between py-3 px-4 border-b border-border/50 last:border-b-0 bg-background/50">
-      <div className="flex items-center gap-3">
-        <Icon className={`w-4 h-4 ${iconColor}`} />
-        <span className="text-sm font-medium text-muted-foreground">{label}</span>
-      </div>
-      <span className="text-sm font-bold text-foreground">{value}</span>
-    </div>
-  );
 
   const detectedCanton = getCantonFromPLZ(representation === 'guardian' ? affectedPlz : insuredPlz);
 
@@ -729,22 +731,6 @@ export function SettingsPage() {
           )}
         </div>
 
-        {/* Right Column: Konto */}
-        <div className="lg:col-span-5 space-y-6">
-          <SettingsCard
-            icon={Shield}
-            iconColor="text-blue-600"
-            iconBg="bg-blue-500/10"
-            title="Konto"
-            description="Ihre Anmeldedaten und Zugriffsrechte"
-          >
-            <ReadOnlyField label="E-Mail" value={user?.email ?? ''} />
-            <ReadOnlyField
-              label="Rolle"
-              value={employerAccess?.role === 'admin_full' ? 'Administrator (Vollzugriff)' : 'Administrator (Eingeschränkt)'}
-            />
-          </SettingsCard>
-        </div>
       </div>
       )}
 

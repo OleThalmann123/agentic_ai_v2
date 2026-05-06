@@ -33,7 +33,7 @@ function isValidIban(v: string): boolean {
 
 function isValidPhone(v: string): boolean {
   if (!v.trim()) return true;
-  const digits = v.replace(/[\s\-\(\)\.]/g, '');
+  const digits = v.replace(/[\s\-().]/g, '');
   return /^\+?\d{10,15}$/.test(digits);
 }
 
@@ -44,10 +44,11 @@ const inputCls = "w-full px-4 py-3 rounded-lg border bg-background text-base foc
 function Field({ label, value, onChange, disabled, placeholder, type = 'text' }: {
   label: string; value: string; onChange?: (v: string) => void; disabled?: boolean; placeholder?: string; type?: string;
 }) {
+  const id = label.toLowerCase().replace(/[^a-z0-9]+/g, '-');
   return (
     <div className="space-y-1">
-      <label className="text-sm font-medium text-muted-foreground">{label}</label>
-      <input type={type} value={value} onChange={e => onChange?.(e.target.value)}
+      <label htmlFor={id} className="text-sm font-medium text-muted-foreground">{label}</label>
+      <input id={id} type={type} value={value} onChange={e => onChange?.(e.target.value)}
         disabled={disabled} placeholder={placeholder}
         className={`${inputCls} ${disabled ? 'bg-muted/40 text-muted-foreground' : ''}`} />
     </div>
@@ -255,7 +256,13 @@ export function EmployerOnboarding({ onComplete }: Props) {
       .from('employer_access')
       .insert({ employer_id: employerId, user_id: user.id, role: 'admin_full', invited_email: user.email || '' });
 
-    if (e2) { toast.error('Fehler: ' + e2.message); setLoading(false); return; }
+    if (e2) {
+      // Roll back the orphaned employer row so the user can retry cleanly.
+      await supabase.from('employer').delete().eq('id', employerId);
+      toast.error('Fehler: ' + e2.message);
+      setLoading(false);
+      return;
+    }
 
     toast.success('Einrichtung abgeschlossen!');
     await refreshProfile();

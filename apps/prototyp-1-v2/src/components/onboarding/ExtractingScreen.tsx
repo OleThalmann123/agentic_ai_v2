@@ -118,19 +118,19 @@ export function ExtractingScreen({ onCancel }: Props) {
             icon={<ScanSearch className="h-4 w-4 text-emerald-200" />}
             iconBg="bg-emerald-500/15 border-emerald-300/25"
             title="Agent 1 · Klassifizierung"
-            description="Dokumenttyp wird erkannt."
+            description="Erkennt den Dokumenttyp."
           />
           <StepItem
             icon={<FileText className="h-4 w-4 text-blue-200" />}
             iconBg="bg-blue-500/15 border-blue-300/25"
             title="Agent 2 · Datenextraktion"
-            description="Stammdaten & Vertragswerte erkannt."
+            description="Extrahiert Stammdaten & Vertragswerte."
           />
           <StepItem
             icon={<ShieldCheck className="h-4 w-4 text-purple-200" />}
             iconBg="bg-purple-500/15 border-purple-300/25"
             title="Agent 3 · Qualitätscheck"
-            description="Unsichere Felder werden markiert."
+            description="Markiert unsichere Felder."
           />
           <StepItem
             icon={<CheckCircle2 className="h-4 w-4 text-white/55" />}

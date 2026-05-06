@@ -194,9 +194,9 @@ export function LohnbudgetRechner() {
     const nettolohnJahr = bruttolohnJahr - totalAnJahr;
 
     // Adressaten
-    let beitraegeAusgleichskasseJahr = ahvAgJahr + alvAgJahr + vkAgJahr + ahvAnJahr + alvAnJahr;
+    const beitraegeAusgleichskasseJahr = ahvAgJahr + alvAgJahr + vkAgJahr + ahvAnJahr + alvAnJahr;
 
-    let beitraegeFakJahr = fakAgJahr;
+    const beitraegeFakJahr = fakAgJahr;
 
     const praemienKtJahr = [ktvAgJahr, ktvAnJahr].filter((v): v is number => v !== null);
     const totalKtJahr = praemienKtJahr.length > 0 ? praemienKtJahr.reduce((a, b) => a + b, 0) : null;

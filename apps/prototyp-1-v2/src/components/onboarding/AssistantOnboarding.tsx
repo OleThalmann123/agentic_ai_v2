@@ -908,6 +908,8 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
   const [nbuEmployer, setNbuEmployer] = useState('');
   const [nbuEmployee, setNbuEmployee] = useState('');
   const [nbuEmployerVoluntary, setNbuEmployerVoluntary] = useState(false);
+  const [ktvAg, setKtvAg] = useState('');
+  const [ktvEmployee, setKtvEmployee] = useState('');
 
   const [saving, setSaving] = useState(false);
   // Binary review state
@@ -1095,6 +1097,8 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
       setNbuEmployer(shareFieldToUiString(data.nbu_employer || data.nbu_employer_pct));
       setNbuEmployee(shareFieldToUiString(data.nbu_employee || data.nbu_employee_pct));
       setNbuEmployerVoluntary(data.nbu_employer_voluntary === true);
+      setKtvAg(data.ktv_ag?.toString() || '');
+      setKtvEmployee(data.ktv_employee?.toString() || '');
     }
   }, [editAssistant]);
 
@@ -1441,6 +1445,8 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
         nbu_employer: nbuEmployerOut,
         nbu_employee: nbuEmployeeOut,
         nbu_employer_voluntary: nbuEmployerVoluntary,
+        ktv_ag: ktvAg.trim() || null,
+        ktv_employee: ktvEmployee.trim() || null,
         extraction_metadata: extraction?.extraction_metadata ?? null,
       }
     };
@@ -1995,6 +2001,25 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
                         <span className="text-sm text-muted-foreground">Auch bei Pensum unter 8h/Woche</span>
                       </label>
                     </MiniField>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-slate-200 space-y-3">
+                    <h5 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                      Krankentaggeldversicherung (KTV)
+                    </h5>
+                    <p className="text-xs text-slate-500">Optional – nur ausfüllen wenn eine KTV besteht. Die Sätze finden sich in der Versicherungspolice oder im Arbeitsvertrag (in %).</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <MiniField title="KTV AG-Prämienanteil (%)" hasValue={!!ktvAg}
+                        hint="Arbeitgeber-Anteil an der KTV-Prämie in Prozent (z.B. 0.50 für 0.5%)">
+                        <input type="number" min={0} max={10} step="0.01" placeholder="z.B. 0.50"
+                          value={ktvAg} onChange={e => setKtvAg(e.target.value)} className={inputStyle} />
+                      </MiniField>
+                      <MiniField title="KTV AN-Prämienanteil (%)" hasValue={!!ktvEmployee}
+                        hint="Arbeitnehmer-Anteil an der KTV-Prämie in Prozent (z.B. 0.50 für 0.5%)">
+                        <input type="number" min={0} max={10} step="0.01" placeholder="z.B. 0.50"
+                          value={ktvEmployee} onChange={e => setKtvEmployee(e.target.value)} className={inputStyle} />
+                      </MiniField>
+                    </div>
                   </div>
                 </div>
               </div>

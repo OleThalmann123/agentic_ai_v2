@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@asklepios/core';
-import { formatCHF } from '@asklepios/core';
 import type { Assistant } from '@asklepios/core';
 import { toast } from 'sonner';
-import { Users, Pencil, X, UserPlus, Share2, Copy, Check, UploadCloud, Trash2 } from 'lucide-react';
+import { Users, Pencil, Share2, Copy, Check, UploadCloud, Trash2, ClipboardList, Type } from 'lucide-react';
 import { AsklepiosExtractLogo } from '@/components/brand/AsklepiosExtractLogo';
 
 import { AssistantOnboarding } from '@/components/onboarding/AssistantOnboarding';
@@ -76,6 +75,28 @@ export function AssistantsPage() {
   const openEdit = (a: Assistant) => {
     setAssistantToEdit(a);
     setShowAssistantOnboarding(true);
+  };
+
+  const handleToggleContractFlag = async (
+    a: Assistant,
+    flag: 'time_entry_requires_activity_breakdown' | 'time_entry_allows_freetext',
+    value: boolean,
+  ) => {
+    const updated = {
+      ...(a.contract_data as Record<string, unknown> | null ?? {}),
+      [flag]: value,
+    };
+    const { error } = await supabase
+      .from('assistant')
+      .update({ contract_data: updated })
+      .eq('id', a.id);
+    if (error) {
+      toast.error('Fehler: ' + error.message);
+    } else {
+      setAssistants((prev) =>
+        prev.map((x) => (x.id === a.id ? { ...x, contract_data: updated } : x)),
+      );
+    }
   };
 
   const handleDelete = async (a: Assistant) => {
@@ -174,10 +195,12 @@ export function AssistantsPage() {
 
       {/* Assistant list */}
       <div className="bg-card rounded-xl border overflow-hidden">
-        <table className="w-full">
+        <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px]">
           <thead>
             <tr className="border-b bg-muted/30">
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-6 py-3">Name / Kontakt</th>
+              <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-6 py-3">Einstellungen</th>
               <th className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider px-6 py-3">Aktionen</th>
             </tr>
           </thead>
@@ -190,7 +213,11 @@ export function AssistantsPage() {
                 </td>
               </tr>
             ) : (
-              assistants.map((a) => (
+              assistants.map((a) => {
+                const cd = (a.contract_data as Record<string, unknown> | null) ?? {};
+                const activityOn = cd.time_entry_requires_activity_breakdown !== false;
+                const freetextOn = !!cd.time_entry_allows_freetext;
+                return (
                 <tr key={a.id} className={`border-b last:border-b-0 hover:bg-muted/20 transition-colors ${!a.is_active ? 'opacity-50' : ''}`}>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
@@ -201,6 +228,40 @@ export function AssistantsPage() {
                         <p className="font-medium text-sm">{a.name}</p>
                         {a.email && <p className="text-xs text-muted-foreground">{a.email}</p>}
                       </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col gap-2">
+                      {/* Tätigkeitsbereich toggle */}
+                      <label className="flex items-center gap-2 cursor-pointer select-none" title="Tätigkeitsbereich beim Stundeneintrag anzeigen">
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={activityOn}
+                          onClick={() => handleToggleContractFlag(a, 'time_entry_requires_activity_breakdown', !activityOn)}
+                          className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${activityOn ? 'bg-primary' : 'bg-slate-200'}`}
+                        >
+                          <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${activityOn ? 'translate-x-4' : 'translate-x-1'}`} />
+                        </button>
+                        <ClipboardList className="w-3.5 h-3.5 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Tätigkeitsbereich</span>
+                      </label>
+                      {/* Freitext toggle — nur sichtbar wenn Tätigkeitsbereich aktiv */}
+                      {activityOn && (
+                        <label className="flex items-center gap-2 cursor-pointer select-none pl-1" title="Erlaubt der Person, zusätzlich einen Freitext einzugeben">
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={freetextOn}
+                            onClick={() => handleToggleContractFlag(a, 'time_entry_allows_freetext', !freetextOn)}
+                            className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${freetextOn ? 'bg-primary' : 'bg-slate-200'}`}
+                          >
+                            <span className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${freetextOn ? 'translate-x-4' : 'translate-x-1'}`} />
+                          </button>
+                          <Type className="w-3.5 h-3.5 text-muted-foreground" />
+                          <span className="text-xs text-muted-foreground">Freitext erlauben</span>
+                        </label>
+                      )}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -230,10 +291,12 @@ export function AssistantsPage() {
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* (Old Add/Edit modal removed in favor of full AssistantOnboarding screen) */}

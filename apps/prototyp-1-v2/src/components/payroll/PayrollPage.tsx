@@ -179,7 +179,7 @@ export function PayrollPage() {
       const next = { ...prev, [assistantId]: value };
       try {
         localStorage.setItem(`payroll_no_work:${currentMonth}`, JSON.stringify(next));
-      } catch {}
+      } catch (_) { /* localStorage unavailable – safe to ignore */ }
       return next;
     });
   };
@@ -320,7 +320,9 @@ export function PayrollPage() {
     const stundenlohn = assistant.hourly_rate || (cd?.hourly_rate ? parseFloat(cd.hourly_rate) : 0);
     if (!stundenlohn || hours.totalHours === 0) return null;
 
-    const kanton = cd?.canton || employer?.canton || 'ZH';
+    // For FAK the canton of the employer (workplace = disabled person's home) takes
+    // priority; the assistant's own residence canton from contract_data is the fallback.
+    const kanton = employer?.canton || cd?.canton || 'ZH';
     // Bug A4: Ferienwochen dürfen nicht mehr still auf 4 fallen. Fehlt der
     // Wert oder ist er ungültig, warnen wir und benutzen 4 Wochen als
     // dokumentierten Fallback – sichtbar in der Konsole und im Toast.
@@ -344,6 +346,9 @@ export function PayrollPage() {
     // explizites Opt-in. Voluntary wird dort separat behandelt.
     const nbuEligible = cd?.nbu_eligible === true;
 
+    const ktvAG = cd?.ktv_ag ? parseFloat(cd.ktv_ag) / 100 : undefined;
+    const ktvAN = cd?.ktv_employee ? parseFloat(cd.ktv_employee) / 100 : undefined;
+
     return calculatePayroll({
       stundenlohn,
       anzahlStunden: hours.totalHours,
@@ -355,6 +360,8 @@ export function PayrollPage() {
       nbuEmployeeShare,
       nbuEligible,
       nbuEmployerVoluntary,
+      ktvAG,
+      ktvAN,
       agName: employer?.name,
       anName: assistant.name,
     });
@@ -1008,7 +1015,7 @@ export function PayrollPage() {
         </div>
 
         {/* Stats row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 14, marginTop: 24, position: 'relative', zIndex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 14, marginTop: 24, position: 'relative', zIndex: 1 }}>
           <StatCard icon={<Users style={{ width: 16, height: 16 }} />} label="Personen" value={String(assistants.length)} />
           <StatCard icon={<Clock style={{ width: 16, height: 16 }} />} label="Stunden" value={fmt(totalHoursAll)} />
           <StatCard icon={<ShieldCheck style={{ width: 16, height: 16 }} />} label="Bestätigt" value={`${confirmedCount}/${assistants.length}`} />
@@ -1347,7 +1354,7 @@ export function PayrollPage() {
                           />
                           {/* Quick summary row */}
                           {result && (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, marginBottom: 16 }}>
                               <div style={{ background: '#f8fafc', borderRadius: 10, padding: '12px 14px', border: '1px solid #e2e8f0' }}>
                                 <p style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#475569', margin: '0 0 4px' }}>Gesamtkosten Arbeitgeber</p>
                                 <p style={{ fontSize: 17, fontWeight: 800, color: '#1e293b', margin: 0, fontVariantNumeric: 'tabular-nums' }}>CHF {fmt(result.totalaufwandAG.perYear)}</p>
@@ -1624,7 +1631,16 @@ export function PayrollPage() {
                                     <PaySection title="Abzüge">
                                       <PayRow label="AHV/IV/EO" rate={dAhv?.rate ?? null} perH={dAhv?.perHour} perM={dAhv?.perMonth ?? 0} />
                                       <PayRow label="ALV" rate={dAlv?.rate ?? null} perH={dAlv?.perHour} perM={dAlv?.perMonth ?? 0} />
-                                      <PayRow label="KTV" rate={dKtv?.rate ?? null} perH={dKtv?.perHour} perM={dKtv?.perMonth ?? 0} />
+                                      {dKtv ? (
+                                        <PayRow label="KTV" rate={dKtv.rate ?? null} perH={dKtv.perHour} perM={dKtv.perMonth ?? 0} />
+                                      ) : (
+                                        <tr style={{ borderBottom: '1px solid #f1f5f9' }}>
+                                          <td style={{ padding: '6px 14px', color: '#94a3b8' }}>
+                                            KTV <span style={{ fontSize: 9, background: '#f1f5f9', padding: '1px 6px', borderRadius: 9999, marginLeft: 4, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nicht erfasst</span>
+                                          </td>
+                                          <td colSpan={3} style={{ padding: '6px 14px', textAlign: 'right', color: '#cbd5e1', fontSize: 11 }}>–</td>
+                                        </tr>
+                                      )}
                                       <PayRow label="Nichtberufsunfallvers. (NBU)" rate={dNbu?.rate ?? null} perH={dNbu?.perHour} perM={dNbu?.perMonth ?? 0} />
                                       {dQst && dQst.enabled !== false && (dQst.perMonth ?? 0) > 0 ? (
                                         <PayRow label="Quellensteuer" rate={dQst.rate ?? null} perH={dQst.perHour} perM={dQst.perMonth ?? 0} />

@@ -604,25 +604,30 @@ export const contractDataSubmissionTool = tool(
       }
     }
 
-    // Derive canton from ZIP if not provided
-    if (!insuranceData.canton?.value && (assistantData.zip?.value || employerData.zip?.value)) {
-      const zip = String(assistantData.zip?.value || employerData.zip?.value);
+    // Derive canton from assistant's ZIP only — never from employer ZIP to avoid
+    // assigning the disabled person's canton to the assistant's residence record.
+    if (!insuranceData.canton?.value && assistantData.zip?.value) {
+      const zip = String(assistantData.zip.value);
       const prefix2 = zip.substring(0, 2);
       const prefix1 = zip.substring(0, 1);
       const derivedCanton = ZIP_TO_CANTON[prefix2] || ZIP_TO_CANTON[prefix1];
       if (derivedCanton) {
         corrections.push(
-          `Wohnsitzkanton abgeleitet aus PLZ ${zip} → ${derivedCanton} (${SWISS_CANTONS[derivedCanton]}). ` +
+          `Wohnsitzkanton der Assistenzperson abgeleitet aus PLZ ${zip} → ${derivedCanton} (${SWISS_CANTONS[derivedCanton]}). ` +
           `Hinweis: Ableitung basiert auf PLZ-Prefix – bitte prüfen, ob Kanton korrekt ist.`,
         );
         if (!insuranceData.canton) insuranceData.canton = {};
         insuranceData.canton.value = derivedCanton;
-        insuranceData.canton.note = `Abgeleitet aus PLZ ${zip} (Prefix-basiert, bitte prüfen)`;
+        insuranceData.canton.note = `Abgeleitet aus PLZ ${zip} der Assistenzperson (Prefix-basiert, bitte prüfen)`;
       } else {
         validationErrors.push(
-          `Kanton konnte nicht aus PLZ ${zip} abgeleitet werden – bitte manuell eingeben.`,
+          `Wohnsitzkanton konnte nicht aus PLZ ${zip} der Assistenzperson abgeleitet werden – bitte manuell eingeben.`,
         );
       }
+    } else if (!insuranceData.canton?.value && !assistantData.zip?.value) {
+      validationErrors.push(
+        `Wohnsitzkanton nicht ableitbar: PLZ der Assistenzperson fehlt im Vertrag – bitte manuell eingeben.`,
+      );
     }
 
     // Guard against hallucinated vacation_weeks: require non-empty source_text

@@ -113,7 +113,7 @@ Regeln:
 - holiday_supplement_pct: NUR setzen wenn explizit als Prozentsatz im Vertrag angegeben. Wird sonst automatisch aus vacation_weeks berechnet – daher vacation_weeks NIEMALS halluzinieren.
 - Geschlecht: niemals aus Name oder Zivilstand ableiten. Null ist korrekt.
 - IBAN: nur setzen wenn klar lesbar.
-- Kanton: wird aus PLZ der Assistenzperson abgeleitet (via Tool).
+- Kanton: wird aus PLZ der Assistenzperson (Arbeitnehmerin) abgeleitet (via Tool). NIEMALS die PLZ oder Adresse der Arbeitgeberin (betroffene/assistenznehmende Person) verwenden.
 - Prozentsätze immer als Dezimal: 5.3% = 0.053. NBU-Sätze liegen typisch bei 0.005–0.03.
 - NBU-Aufteilung: AG+AN muss Gesamtsatz ergeben. "Je hälftig" = Gesamt/2. Ohne Angabe: AN = Gesamt.
 - source_text MUSS ein wörtliches Zitat aus dem Vertrag sein. Wenn kein Zitat möglich → value = null.
@@ -169,7 +169,7 @@ Format: Nur valides JSON. Sprache der Keys: Englisch.
       "payment_iban": { "value": "", "source_text": "", "note": "CH/LI IBAN. NUR setzen wenn wörtlich im Vertrag. source_text MUSS die IBAN enthalten. Sonst null." } },
     "social_insurance": {
       "accounting_method": { "value": "ordinary", "source_text": "", "note": "" },
-      "canton": { "value": "", "source_text": "", "note": "2-stellig, aus PLZ ableiten" },
+      "canton": { "value": "", "source_text": "", "note": "2-stellig, aus PLZ der Assistenzperson ableiten – NICHT aus Arbeitgeber-PLZ" },
       "nbu_total_rate_pct": { "value": null, "source_text": "", "note": "Dezimal, 0.015=1.5%, typ. 0.005-0.03" },
       "nbu_employer_pct": { "value": null, "source_text": "", "note": "Dezimal, AG-Anteil" },
       "nbu_employee_pct": { "value": null, "source_text": "", "note": "Dezimal, AN-Anteil an der Gesamtprämie" },

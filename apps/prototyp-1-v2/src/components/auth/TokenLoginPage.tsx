@@ -41,6 +41,7 @@ interface TimeEntry {
   end_time: string;
   is_night: boolean;
   category?: string;
+  category_note?: string;
   confirmed: boolean;
 }
 
@@ -123,6 +124,7 @@ export function TokenLoginPage() {
   const [endH, setEndH] = useState(12);
   const [endM, setEndM] = useState(0);
   const [category, setCategory] = useState('');
+  const [categoryNote, setCategoryNote] = useState('');
   const [isNight, setIsNight] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -270,9 +272,11 @@ export function TokenLoginPage() {
     const startTime = fmtTime(startH, startM);
     const endTime = fmtTime(endH, endM);
     // Tätigkeitsbereiche: wenn explizit deaktiviert => ausblenden; sonst standardmässig aktiv (MVP).
-    const requiresActivitiesFlag = (assistant.contract_data as any)?.time_entry_requires_activity_breakdown;
-    const requiresActivities = requiresActivitiesFlag !== false;
+    const cd = (assistant.contract_data as any) ?? {};
+    const requiresActivities = cd.time_entry_requires_activity_breakdown !== false;
+    const allowsFreetext = !!cd.time_entry_allows_freetext;
     const categoryToSave = requiresActivities && !isNight ? (category || null) : null;
+    const categoryNoteToSave = requiresActivities && allowsFreetext && !isNight ? (categoryNote.trim() || null) : null;
 
     if (editingId) {
       const sMin = parseTimeToMinutes(startTime);
@@ -293,6 +297,7 @@ export function TokenLoginPage() {
           end_time: endTime,
           is_night: isNight,
           category: categoryToSave,
+          category_note: categoryNoteToSave,
         })
         .eq('id', editingId);
       if (err) {
@@ -316,6 +321,7 @@ export function TokenLoginPage() {
           entered_by: 'assistant',
           confirmed: false,
           category: categoryToSave,
+          category_note: categoryNoteToSave,
         });
         if (err) {
           setSaveError(err.message || 'Speichern fehlgeschlagen.');
@@ -663,25 +669,40 @@ export function TokenLoginPage() {
             </div>
 
             {/* Activity dropdown (only for day shifts, if required) */}
-            {(assistant ? ((assistant.contract_data as any)?.time_entry_requires_activity_breakdown !== false) : false) && !isNight ? (
-              <div className="bg-white rounded-2xl shadow-sm border p-4">
-                <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold text-center mb-2">
-                  Tätigkeitsbereich
-                </p>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full px-3 py-3 rounded-xl border bg-white text-base focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
-                >
-                  <option value="">Bitte wählen…</option>
-                  {ACTIVITY_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            ) : null}
+            {(() => {
+              const acd = (assistant?.contract_data as any) ?? {};
+              const showActivity = assistant && acd.time_entry_requires_activity_breakdown !== false && !isNight;
+              const showFreetext = showActivity && !!acd.time_entry_allows_freetext;
+              if (!showActivity) return null;
+              return (
+                <div className="bg-white rounded-2xl shadow-sm border p-4 space-y-3">
+                  <p className="text-[10px] uppercase tracking-widest text-slate-400 font-semibold text-center">
+                    Tätigkeitsbereich
+                  </p>
+                  <select
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
+                    className="w-full px-3 py-3 rounded-xl border bg-white text-base focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                  >
+                    <option value="">Bitte wählen…</option>
+                    {ACTIVITY_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  {showFreetext && (
+                    <textarea
+                      value={categoryNote}
+                      onChange={(e) => setCategoryNote(e.target.value)}
+                      placeholder="Zusätzliche Beschreibung (optional)…"
+                      rows={2}
+                      className="w-full px-3 py-2.5 rounded-xl border bg-white text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-colors"
+                    />
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Save button */}
             <button onClick={handleSave} disabled={saving || payrollConfirmed}
