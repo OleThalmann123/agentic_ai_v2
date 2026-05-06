@@ -5,7 +5,7 @@
  *   LANGSMITH_TRACING=true
  *   LANGSMITH_ENDPOINT=https://api.smith.langchain.com
  *   LANGSMITH_API_KEY=…        (nur .env / Vercel – nie mit VITE_-Prefix)
- *   LANGSMITH_PROJECT="HSG Agentic"
+ *   LANGSMITH_PROJECT="AgenticAI V2"
  *
  * Vite injiziert LANGSMITH_TRACING / LANGSMITH_PROJECT / LANGSMITH_ENDPOINT sicher ins Bundle
  * (siehe apps/prototyp-1-v2/vite.config.ts `define`). API-Keys gehen nicht ins Frontend.
@@ -89,7 +89,7 @@ export function getLangSmithProjectName(): string {
   return (
     langSmithProjectFromDocsEnv() ||
     (import.meta.env.VITE_LANGSMITH_PROJECT as string | undefined) ||
-    'HSG Agentic'
+    'AgenticAI V2'
   );
 }
 
