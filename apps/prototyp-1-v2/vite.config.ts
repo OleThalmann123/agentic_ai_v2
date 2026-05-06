@@ -23,8 +23,8 @@ export default defineConfig(({ mode }) => {
     envTruthy(env.LANGSMITH_TRACING_V2) ||
     envTruthy(env.LANGCHAIN_TRACING_V2)
   const langSmithProject =
-    (env.LANGSMITH_PROJECT || env.VITE_LANGSMITH_PROJECT || 'HSG Agentic').trim() ||
-    'HSG Agentic'
+    (env.LANGSMITH_PROJECT || env.VITE_LANGSMITH_PROJECT || 'AgenticAI V2').trim() ||
+    'AgenticAI V2'
   const langSmithEndpoint = (env.LANGSMITH_ENDPOINT || 'https://api.smith.langchain.com').replace(
     /\/+$/,
     '',
