@@ -79,8 +79,8 @@ directly against the trace, without requiring an automated RCA
 mechanism.
 
 A fully automated RCA layer (rule-based triage over combined issue
-tags, or LLM-as-Judge over failure traces) becomes worthwhile only
-once the trace volume makes manual review the bottleneck.
+tags, or LLM-as-Judge over failure traces) will be introduced once
+the trace volume justifies it.
 
 ## Reference to the Framework Table
 
