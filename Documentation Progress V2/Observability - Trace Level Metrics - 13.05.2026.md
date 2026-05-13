@@ -65,19 +65,15 @@ quantities, which we can inspect at the spans of the trace:
   spans with session ID X", which is the basis for targeted error
   analysis and Issue Detection (Pillar 1, cell 1.3).
 
-## Reference to the Framework Table
-
-This file covers the Pillar 1 cell **"Trace Level Metrics (Cost /
-Latency / Token / LLM / Tools)"** from the lecture *LU09 - Managing
-Risk of AI Agents* (Slide 41, Mechanisms of Agent Ops). Before the
-pricing setup this cell stood at 🟡 partial, because tokens, latency,
-and tool calls were already captured but the cost value remained at
-`$0` due to missing model prices. With the OpenRouter rates entered
-manually, cost is now productive, and all five components of the
-Slide-41 definition are fully captured. Status: ✅ Available.
-
 Validation example from a real trace on 2026-05-13: a document run
 produces total costs of $0.205, broken down across four LLM spans
 (Classifier $0.005, Extractor Round 0 $0.046, Extractor Round 1
 $0.064, Control $0.090). Total latency: 91.5 seconds. Total tokens:
 37,018.
+
+## Reference to the Framework Table
+
+This file covers the Pillar 1 cell **"Trace Level Metrics (Cost /
+Latency / Token / LLM / Tools)"** from the lecture *LU09 - Managing
+Risk of AI Agents* (Slide 41, Mechanisms of Agent Ops). 
+
