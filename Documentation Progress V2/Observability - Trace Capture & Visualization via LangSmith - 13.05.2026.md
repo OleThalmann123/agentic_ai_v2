@@ -52,5 +52,4 @@ that pillar's documentation is built out.
 
 This file covers the Pillar 1 cell **"Trace Capture & Visualization"**
 from the lecture *LU09 - Managing Risk of AI Agents* (Slide 41,
-Mechanisms of Agent Ops, watsonx Orchestrate Framework). Status:
-✅ Available.
+Mechanisms of Agent Ops, watsonx Orchestrate Framework).
