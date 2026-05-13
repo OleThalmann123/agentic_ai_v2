@@ -1,4 +1,6 @@
-# Observability via LangSmith
+# Observability / Trace Capture & Visualization via LangSmith
+
+*13.05.2026*
 
 ## Motivation and Tool Selection
 
