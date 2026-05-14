@@ -78,14 +78,14 @@ export async function proxyToLangSmith(
         const ctLower = (ct as string | undefined)?.toLowerCase() ?? '';
         if (ctLower.includes('multipart/form-data')) {
           if (Buffer.isBuffer(req.body)) {
-            fetchOptions.body = req.body;
+            fetchOptions.body = req.body as unknown as BodyInit;
           } else if (typeof req.body === 'string') {
             fetchOptions.body = req.body;
           } else {
             fetchOptions.body = JSON.stringify(req.body);
           }
         } else if (typeof req.body === 'string' || Buffer.isBuffer(req.body)) {
-          fetchOptions.body = req.body as string | Buffer;
+          fetchOptions.body = req.body as unknown as BodyInit;
         } else {
           fetchOptions.body = JSON.stringify(req.body);
         }
