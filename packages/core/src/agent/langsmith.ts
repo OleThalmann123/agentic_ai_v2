@@ -27,6 +27,7 @@ import type { RunTree } from 'langsmith/run_trees';
 
 let _tracer: LangChainTracer | null = null;
 let _client: Client | null = null;
+let _tracingDisabledWarnLogged = false;
 
 /** Parent-Run der Pipeline — gesetzt in pipeline.ts, damit LLM-Calls darunter hängen. */
 let _pipelineLangSmithRoot: RunTree | null = null;
@@ -163,14 +164,15 @@ async function getLangchainCallbacksForParentRun(
 }
 
 function getLangSmithConfig() {
-  const hasBrowserApiKey = !!import.meta.env.VITE_LANGSMITH_API_KEY;
   const proxyFlag = isTruthyEnv(import.meta.env.VITE_LANGSMITH_PROXY as string | undefined);
   const docsTracingOn = langSmithTracingFromDocsEnv();
-  const proxyEnabled = !hasBrowserApiKey && (proxyFlag || docsTracingOn);
+  const proxyEnabled = proxyFlag || docsTracingOn;
 
+  // VITE_LANGSMITH_PROXY (→ /api/langsmith/*) ist der einzige Client-seitige Pfad.
+  // Ein direkter API-Key im Browser-Bundle ist nicht erlaubt.
   const apiKey = proxyEnabled
     ? 'proxy' // placeholder – the serverless function injects the real key
-    : import.meta.env.VITE_LANGSMITH_API_KEY;
+    : undefined;
 
   let endpoint: string;
   if (proxyEnabled) {
@@ -190,8 +192,7 @@ function getLangSmithConfig() {
 export function isLangSmithEnabled(): boolean {
   return (
     langSmithTracingFromDocsEnv() ||
-    isTruthyEnv(import.meta.env.VITE_LANGSMITH_PROXY as string | undefined) ||
-    !!import.meta.env.VITE_LANGSMITH_API_KEY
+    isTruthyEnv(import.meta.env.VITE_LANGSMITH_PROXY as string | undefined)
   );
 }
 
@@ -213,9 +214,8 @@ export function getLangSmithClient(): Client | null {
 
   // Browser → Vercel-Proxy: multipart/form-data wird von @vercel/node oft als Objekt geparst und
   // im Proxy fälschlich JSON-stringifiziert → LangSmith 422. JSON-basiertes runs/batch funktioniert.
-  const hasBrowserApiKey = !!import.meta.env.VITE_LANGSMITH_API_KEY;
   const proxyFlag = isTruthyEnv(import.meta.env.VITE_LANGSMITH_PROXY as string | undefined);
-  const useProxy = !hasBrowserApiKey && (proxyFlag || langSmithTracingFromDocsEnv());
+  const useProxy = proxyFlag || langSmithTracingFromDocsEnv();
   if (useProxy) {
     const c = _client as unknown as { _multipartDisabled?: boolean };
     c._multipartDisabled = true;
@@ -229,9 +229,12 @@ export function getLangSmithTracer(): LangChainTracer | null {
 
   const config = getLangSmithConfig();
   if (!config.apiKey) {
-    console.log(
-      '[LangSmith] Tracing disabled – set LANGSMITH_TRACING=true and LANGSMITH_API_KEY (wie Doku), oder VITE_LANGSMITH_PROXY=true; Dev-Server neu starten.',
-    );
+    if (!_tracingDisabledWarnLogged) {
+      console.warn(
+        '[LangSmith] Tracing disabled – VITE_LANGSMITH_PROXY nicht gesetzt. Proxy unter /api/langsmith/* konfigurieren oder LANGSMITH_TRACING=true setzen.',
+      );
+      _tracingDisabledWarnLogged = true;
+    }
     return null;
   }
 

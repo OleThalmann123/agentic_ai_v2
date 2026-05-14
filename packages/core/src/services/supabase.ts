@@ -9,7 +9,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// Auf Token-Login-Seiten (/t/:token) wird der access_token als x-access-token-Header
+// mitgesendet, damit die RLS-Funktion current_assistant_id() den Scope einschränken kann.
+function getTokenFromUrl(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  const m = window.location.pathname.match(/^\/t\/([^/?#]+)/);
+  return m?.[1];
+}
+
+const _tokenFromUrl = getTokenFromUrl();
+
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key'
+  supabaseAnonKey || 'placeholder-key',
+  _tokenFromUrl ? { global: { headers: { 'x-access-token': _tokenFromUrl } } } : undefined
 );
