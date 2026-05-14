@@ -171,7 +171,7 @@ export function AssistantsPage() {
                 <h2 className="text-xl font-bold">Neue Assistenzperson erfassen</h2>
               </div>
               <p className="max-w-md text-white/70">
-                Asklepios_extract hilft dir bei der Anlage deiner Assistenzperson, indem er Stamm- und Vertragsdaten für dich aus dem Arbeitsvertrag ausliest.
+                Asklepios hilft dir bei der Anlage deiner Assistenzperson, indem er Stamm- und Vertragsdaten für dich aus dem Arbeitsvertrag ausliest.
               </p>
             </div>
             <label className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-6 py-3.5 text-sm font-bold text-slate-900 shadow-lg transition-all hover:scale-[1.02] hover:bg-white/90 hover:shadow-xl">

@@ -25,6 +25,7 @@ import {
 import { toast } from 'sonner';
 import type { Assistant } from '@asklepios/core';
 import { Badge, badgeVariants } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { sanitizeFilenamePart } from '@/utils/filename';
 import asklepiosLogoUrl from '@/assets/asklepios-logo.png';
@@ -1288,28 +1289,6 @@ export function PayrollPage() {
                       </button>
                       <ArrowRight style={{ width: 14, height: 14, color: '#cbd5e1', margin: '0 4px', flexShrink: 0 }} />
                       <button
-                        onClick={() => setFlowStep('abrechnung')}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 6,
-                          padding: '7px 14px', borderRadius: 8,
-                          border: 'none', cursor: 'pointer',
-                          fontSize: 12, fontWeight: flowStep === 'abrechnung' ? 600 : 500,
-                          background: flowStep === 'abrechnung' ? '#fff' : 'transparent',
-                          color: flowStep === 'abrechnung' ? '#1e293b' : '#94a3b8',
-                          boxShadow: flowStep === 'abrechnung' ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
-                          transition: 'all 0.2s',
-                        }}
-                      >
-                        <span style={{
-                          width: 18, height: 18, borderRadius: '50%', fontSize: 10, fontWeight: 700,
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          background: flowStep === 'abrechnung' ? '#1e293b' : '#cbd5e1',
-                          color: '#fff',
-                        }}>2</span>
-                        Lohnabrechnung
-                      </button>
-                      <ArrowRight style={{ width: 14, height: 14, color: '#cbd5e1', margin: '0 4px', flexShrink: 0 }} />
-                      <button
                         onClick={() => setFlowStep('dokumente')}
                         style={{
                           display: 'flex', alignItems: 'center', gap: 6,
@@ -1327,7 +1306,7 @@ export function PayrollPage() {
                           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                           background: flowStep === 'dokumente' ? '#1e293b' : '#cbd5e1',
                           color: '#fff',
-                        }}>3</span>
+                        }}>2</span>
                         Dokumente
                       </button>
                     </div>
@@ -1483,19 +1462,14 @@ export function PayrollPage() {
                                               </button>
                                             </div>
                                           ) : (
-                                            <button
+                                            <Button
+                                              variant="default"
+                                              size="sm"
                                               onClick={() => startEditing(e)}
-                                              style={{
-                                                width: 28, height: 28, borderRadius: 6, border: 'none',
-                                                background: 'transparent', color: '#94a3b8', cursor: 'pointer',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                transition: 'all 0.15s',
-                                              }}
-                                              onMouseEnter={ev => { ev.currentTarget.style.background = '#f1f5f9'; ev.currentTarget.style.color = '#475569'; }}
-                                              onMouseLeave={ev => { ev.currentTarget.style.background = 'transparent'; ev.currentTarget.style.color = '#94a3b8'; }}
                                             >
-                                              <Pencil style={{ width: 13, height: 13 }} />
-                                            </button>
+                                              <Pencil className="mr-2 h-4 w-4" />
+                                              Bearbeiten
+                                            </Button>
                                           )}
                                         </div>
                                       </div>
@@ -1545,7 +1519,6 @@ export function PayrollPage() {
                                 <>Ohne erfasste Stunden ist keine Lohnabrechnung möglich.</>
                               )
                             }
-                            onBack={() => setFlowStep('stunden')}
                           />
                           {result ? (
                             <>
@@ -1739,15 +1712,16 @@ export function PayrollPage() {
                                 Das Monatspaket für die IV (Deckblatt und alle Assistenzpersonen) erstellen Sie im Kasten <strong style={{ color: '#334155' }}>über</strong> der Liste.
                               </>
                             }
-                            onBack={() => setFlowStep('abrechnung')}
                           />
                           <div style={{
                             borderRadius: 14,
                             border: '1px solid #e2e8f0',
                             background: '#fff',
                             padding: 12,
+                            display: 'flex',
+                            justifyContent: 'flex-end',
                           }}>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%', maxWidth: 480 }}>
                               {result && (
                                 <DocCard
                                   title={`Lohnabrechnung · ${monthLabel(currentMonth)} · ${a.name}`}
