@@ -159,19 +159,12 @@ authentication via `LANGSMITH_API_KEY`, `LANGSMITH_ENDPOINT` and
 Through this connection Claude Code pulls any trace from
 `AgenticAI V2`, parses the span hierarchy, compares tokens, cost and
 latency per step, inspects inputs and outputs, and derives root-cause
-hypotheses verifiable against the trace material. Worked example: an
-analysis on 2026-05-13 first surfaced the "Double Call" in the
-Extractor, a second LLM invocation after a successful
-`contract_data_submission` that re-serialises the already validated
-tool output and adds no information. A full project sweep on
-2026-05-15 (5 of 5 clean sessions) confirmed and quantified it: the
-redundant round accounts for roughly 29 to 31 percent of session cost
-(about 0.06 to 0.09 USD per document), about 24 s of latency, and
-roughly half of the Extractor token volume, with no quality effect
-because `contracts` derive solely from the tool. The hypothesis was
-verified directly against the trace material and drove the implemented
-fix recorded in Pillar 3, section 3. The deferral of an automated RCA
-layer is stated in section 4.
+hypotheses verifiable against the trace material. Example: an analysis
+on 2026-05-13 surfaced the "Double Call" in the Extractor, a second
+LLM invocation after a successful tool call that adds no information
+yet accounts for roughly one third of pipeline cost; the hypothesis
+was verified directly against the trace. The deferral of an automated
+RCA layer is stated in section 4.
 
 ## 4. Out of Scope
 

@@ -101,20 +101,21 @@ baseline, single-digit volume), so effects are stated as measured
 deltas against the pipeline's own necessary-work floor, not against an
 external benchmark.
 
-Issue and root cause (whole-agent level, 5 of 5 clean sessions,
-project `AgenticAI V2`, sweep 2026-05-15):
+Issue and root cause (one representative session, trace
+`019e2571-5010-7000-8000-008484ba15ec`, project `AgenticAI V2`):
 
-- **Issue 1, runtime cost and duration per document.** Per session
-  about 0.20 to 0.27 USD, about 110 s, about 47 k tokens, 4 LLM calls;
-  the necessary-work floor is about 0.13 to 0.18 USD, about 86 s,
-  about 31 k tokens, 3 LLM calls. Root cause: the Extractor loop did
-  not treat a successful `contract_data_submission` as terminal and
-  forced a further model turn that only re-serialised the validated
-  tool output (Pillar 1, section 1.3.3).
-- **Issue 2, metric integrity.** Only 5 of 7 traces finalised
-  (about 71 percent); the Cost and Latency Cap aggregates (Pillar 2,
-  section 1.5) were computed over incomplete sessions. Root cause: the
-  LangChain callback tracer batches were not awaited on teardown.
+- **Issue 1, runtime cost and duration per document.** The session
+  costs 0.266 USD over 112.65 s with 4 LLM calls; the redundant second
+  Extractor span alone accounts for about 0.083 USD and about 24 s.
+  Root cause: the Extractor loop did not treat a successful
+  `contract_data_submission` as terminal and forced a further model
+  turn that only re-serialised the validated tool output (Pillar 1,
+  section 1.3.3).
+- **Issue 2, metric integrity.** The session did not finalise cleanly
+  in some runs (`pending` traces), so the Cost and Latency Cap
+  aggregates (Pillar 2, section 1.5) were computed over incomplete
+  data. Root cause: the LangChain callback tracer batches were not
+  awaited on teardown.
 
 ### Lever 1: Eliminate the redundant Extractor round (implemented)
 
