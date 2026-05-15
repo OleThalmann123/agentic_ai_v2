@@ -672,13 +672,22 @@ export function mergeWithJudgeResult(
         }
       }
 
+      // Judge now returns confidence_score only. Derive the confidence
+      // enum deterministically from the score (judge no longer emits it),
+      // and take source_text from the extractor's own per-field source
+      // (the judge source_quote fallback was removed with the response
+      // slim-down). judge_justification is no longer produced and stays
+      // undefined; downstream consumers fall back accordingly.
+      const confidenceEnum: 'high' | 'medium' | 'low' =
+        confidenceScore >= 0.85 ? 'high' : confidenceScore >= 0.5 ? 'medium' : 'low';
+
       mergedSection[fieldName] = {
         value: safeRawField.value,
-        confidence: judgeField?.confidence ?? 'medium',
+        confidence: confidenceEnum,
         confidence_score: confidenceScore,
         status,
         review_type: reviewType,
-        source_text: judgeField?.source_quote || safeRawField.source_text || '',
+        source_text: safeRawField.source_text || '',
         note: safeRawField.note,
         judge_justification: judgeField?.justification,
       };

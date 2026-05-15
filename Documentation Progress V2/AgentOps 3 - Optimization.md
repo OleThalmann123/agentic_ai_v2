@@ -188,6 +188,36 @@ Issue and root cause (one representative session, trace
   `overall_status` and field scores. Until that spot-check passes the
   lever is implemented but not quality-confirmed.
 
+### Lever 6: Minimal judge response, confidence_score only (implemented, spot-check pending)
+
+- **Source:** Pillar 1, section 1.2 (judge output token breakdown,
+  trace `019e2c69`). The Control completion was about 4180 tokens; the
+  per-field free text (justification plus source_quote plus summary)
+  was about 35 percent of the output, and the justification on the 33
+  ok-status fields alone was about 554 tokens, plus about 178 tokens
+  source_quote on ok-fields.
+- **Fix:** `asklepios-control.ts`: the per-field judge object is
+  reduced to `{ "confidence_score": <0.0-1.0> }`; `confidence`,
+  `status`, `justification`, `source_found`, `source_quote` are
+  removed from the output schema, the prompt instruction and (as
+  optional) the `JudgeFieldResult` interface. Top-level
+  `overall_confidence`, `overall_status`, `review_required_fields`,
+  `summary` are kept (consumed by `pipeline.ts`). The system-prompt
+  scoring rules (IBAN and vacation guards) are unchanged.
+  `asklepios-extractor.ts` `mergeWithJudgeResult` derives the
+  `confidence` enum deterministically from `confidence_score` and
+  takes `source_text` from the extractor's own per-field source; the
+  judge `source_quote` fallback is dropped.
+- **Effect:** removes the per-field free text from the judge response;
+  Control completion tokens expected about -1000 or more per run.
+- **Trade-off:** the per-field judge audit text is gone (it was
+  internal audit only, Pillar 2 section 2.1); the country ISO
+  prefill in the UI loses the judge hint and falls back to the
+  existing note and value-normalisation path (no break).
+- **Status:** implemented in code; quality verified by the same
+  spot-check as Lever 5 (valid JSON, all fields, unchanged
+  `overall_status` and scores), not by a curated eval set.
+
 Before/after example (real session, trace
 `019e2571-5010-7000-8000-008484ba15ec`; after-values projected from
 the directly measured redundant span, to be replaced by a re-run
