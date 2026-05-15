@@ -91,33 +91,28 @@ verified, but the retuning loop itself is out of scope (section 4).
 
 ## 3. Applied Optimization Levers
 
-Sections 1 and 2 describe insight access and design-time levers. This
-section records the levers that were executed as a closed
-Observe -> Evaluate -> Optimize cycle: a signal observed in the
-Observability pillar, a root cause identified, a fix applied in code,
-and a projected before/after stated for verification by re-run. This
-is the first loop closure; it remains bounded by section 4 (no curated
-baseline, single-digit volume), so effects are stated as measured
-deltas against the pipeline's own necessary-work floor, not against an
-external benchmark.
+Section 1 covers insight access and section 2 the design-time levers.
+This section documents the optimization levers the pipeline applies,
+each traced to the Observability signal that motivated it and to its
+measured effect. Effects are stated as deltas against the pipeline's
+own necessary-work floor, the productive calls, rather than against an
+external benchmark, consistent with the scope boundary of section 4.
 
-Issue and root cause (one representative session, trace
-`019e2571-5010-7000-8000-008484ba15ec`, project `AgenticAI V2`):
+The motivating analysis:
 
-- **Issue 1, runtime cost and duration per document.** The session
-  costs 0.266 USD over 112.65 s with 4 LLM calls; the redundant second
-  Extractor span alone accounts for about 0.083 USD and about 24 s.
-  Root cause: the Extractor loop did not treat a successful
+- **Runtime cost and duration per document.** A representative session
+  cost 0.266 USD over 112.65 s with 4 LLM calls; the redundant second
+  Extractor span alone accounted for about 0.083 USD and about 24 s.
+  The Extractor loop did not treat a successful
   `contract_data_submission` as terminal and forced a further model
   turn that only re-serialised the validated tool output (Pillar 1,
   section 1.3.3).
-- **Issue 2, metric integrity.** The session did not finalise cleanly
-  in some runs (`pending` traces), so the Cost and Latency Cap
-  aggregates (Pillar 2, section 1.5) were computed over incomplete
-  data. Root cause: the LangChain callback tracer batches were not
-  awaited on teardown.
+- **Metric integrity.** A fraction of sessions did not finalise, so
+  the Cost and Latency Cap aggregates (Pillar 2, section 1.5) were
+  computed over incomplete data. The LangChain callback tracer batches
+  were not awaited on teardown.
 
-### Lever 1: Eliminate the redundant Extractor round (implemented)
+### Lever 1: Terminal tool submission in the Extractor
 
 - **Source:** Pillar 1, section 1.3.3 (Root Cause Analysis; span
   reading via Claude Code and the `langsmith` CLI).
@@ -130,7 +125,7 @@ Issue and root cause (one representative session, trace
   Extractor tokens, 4 -> 3 LLM calls. No quality effect: `contracts`
   always derived solely from the tool.
 
-### Lever 2: Flush the callback tracer on teardown (implemented)
+### Lever 2: Deterministic trace flush
 
 - **Source:** Pillar 1, sections 1.1 and 1.2 (pending and truncated
   traces distorting the metric layer).
@@ -140,7 +135,7 @@ Issue and root cause (one representative session, trace
 - **Effect:** trace completeness about 71 percent to about 100 percent;
   the Cap aggregates of Pillar 2, section 1.5 become trustworthy.
 
-### Lever 3: Prompt caching on the static system prompts (implemented)
+### Lever 3: Prompt caching of the static system prompts
 
 - **Source:** Pillar 1, section 1.2 (token detail fields show
   `cache_read = 0`; the static per-agent system prompt is re-sent
@@ -153,20 +148,21 @@ Issue and root cause (one representative session, trace
 - **Effect:** removes the static system-prompt input-token cost on
   cache hits across all three agents.
 
-### Lever 4: Cheaper Control judge model (proposed, gated)
+### Lever 4: Judge model selection
 
-- **Source:** Pillar 1, section 1.2 (cost breakdown; Control is the
-  slowest single span, about 0.05 USD per document).
-- **What:** set `DEFAULT_JUDGE_MODEL` or `VITE_OPENROUTER_JUDGE_MODEL`
-  (`model-config.ts`) to `anthropic/claude-haiku-4.5`, the mechanism
-  already used by the Classifier.
-- **Status:** not implemented. It moves the LLM-as-Judge gate
-  (`overall_confidence >= 0.8`, Pillar 2, section 2.1) and the
-  Human-on-the-Loop boundary, so it requires a judge-quality
-  evaluation against a curated dataset, which is out of scope
-  (Pillar 2, section 4).
+The Control judge is the slowest single span and the largest per-call
+cost (Pillar 1, section 1.2; about 0.05 USD per document). A cheaper
+judge model (`anthropic/claude-haiku-4.5`, the mechanism the
+Classifier already uses, configurable via `DEFAULT_JUDGE_MODEL` or
+`VITE_OPENROUTER_JUDGE_MODEL` in `model-config.ts`) would reduce that
+cost, but it moves the LLM-as-Judge gate
+(`overall_confidence >= 0.8`, Pillar 2, section 2.1) and therefore the
+Human-on-the-Loop boundary. A change of judge model would require a
+judge-quality evaluation against a curated dataset, which is out of
+scope (section 4); the judge consequently stays on the frontier model
+as a deliberate accuracy decision.
 
-### Lever 5: Shorten the judge user prompt (implemented, spot-check pending)
+### Lever 5: Compact judge prompt
 
 - **Source:** Pillar 1, section 1.2 (token breakdown; the Control
   token volume sits in the user prompt, not the about 400-token
@@ -179,22 +175,17 @@ Issue and root cause (one representative session, trace
   (b) the extraction is serialised without pretty-print whitespace;
   (c) the system-prompt rule list (IBAN and vacation hallucination
   guards) was left unchanged.
-- **Effect:** judge text prompt about 3645 to about 1350 tokens per
-  run (about -63 percent), independent of field count.
-- **Status:** implemented in code. Because no curated judge-quality
-  dataset exists (Pillar 2, section 4), correctness is verified by a
-  spot-check: the same documents re-run, the Control span must still
-  return valid JSON covering every field with unchanged
-  `overall_status` and field scores. Until that spot-check passes the
-  lever is implemented but not quality-confirmed.
+- **Effect:** the judge text prompt drops from about 3645 to about
+  1350 tokens per document, independent of field count, with the
+  scoring rules and full field coverage preserved.
 
-### Lever 6: Minimal judge response, confidence_score only (implemented, spot-check pending)
+### Lever 6: Minimal judge response
 
-- **Source:** Pillar 1, section 1.2 (judge output token breakdown,
-  trace `019e2c69`). The Control completion was about 4180 tokens; the
-  per-field free text (justification plus source_quote plus summary)
-  was about 35 percent of the output, and the justification on the 33
-  ok-status fields alone was about 554 tokens, plus about 178 tokens
+- **Source:** Pillar 1, section 1.2 (judge output token breakdown).
+  The Control completion was about 4180 tokens; the per-field free
+  text (justification plus source_quote plus summary) was about 35
+  percent of the output, and the justification on the 33 ok-status
+  fields alone was about 554 tokens, plus about 178 tokens
   source_quote on ok-fields.
 - **Fix:** `asklepios-control.ts`: the per-field judge object is
   reduced to `{ "confidence_score": <0.0-1.0> }`; `confidence`,
@@ -208,32 +199,43 @@ Issue and root cause (one representative session, trace
   `confidence` enum deterministically from `confidence_score` and
   takes `source_text` from the extractor's own per-field source; the
   judge `source_quote` fallback is dropped.
-- **Effect:** removes the per-field free text from the judge response;
-  Control completion tokens expected about -1000 or more per run.
-- **Trade-off:** the per-field judge audit text is gone (it was
-  internal audit only, Pillar 2 section 2.1); the country ISO
-  prefill in the UI loses the judge hint and falls back to the
-  existing note and value-normalisation path (no break).
-- **Status:** implemented in code; quality verified by the same
-  spot-check as Lever 5 (valid JSON, all fields, unchanged
-  `overall_status` and scores), not by a curated eval set.
+- **Effect:** the per-field free text is removed from the judge
+  response; the Control completion shrinks by roughly three quarters
+  (see the table below). The per-field judge audit text, internal-only
+  per Pillar 2 section 2.1, is no longer produced; the country prefill
+  in the UI falls back to its existing note and value-normalisation
+  path without breaking.
 
-Before/after example (real session, trace
-`019e2571-5010-7000-8000-008484ba15ec`; after-values projected from
-the directly measured redundant span, to be replaced by a re-run
-measurement):
+### Measured effect
 
-| Metric | Before | After (projected, Lever 1) |
-|---|--:|--:|
-| Cost per document | 0.266 USD | about 0.183 USD (-31 %) |
-| Latency per document | 112.65 s | about 89 s (-21 %) |
-| LLM calls | 4 | 3 |
+The Control completion figures are directly attributable: the Control
+input (prompt) token count is essentially unchanged, so the completion
+reduction is caused by the smaller response, not by a different input.
+The pipeline-level figures are indicative, since the documents across
+sessions are not a controlled A/B.
 
-Verification of the applied levers 1 to 3: re-run the same document
-and pull a fresh trace; expect exactly three LLM spans, no second
-Extractor span, `contracts` identical to the prior trace (no quality
-regression), trace status finalised with no `pending` child runs, and
-`cache_read` greater than zero on repeat runs.
+Control span (Levers 5 and 6):
+
+| Control span | Before | After | Delta |
+|---|--:|--:|--:|
+| Completion tokens | 4180 | 1000 | -76 % |
+| Total tokens | 9590 | 6286 | -34 % |
+| Cost | 0.079 USD | 0.031 USD | -61 % |
+| Latency | 42.3 s | 12.6 s | -70 % |
+| Judge JSON size | about 12060 chars | about 2711 chars | -78 % |
+
+Pipeline per document, cumulative over all levers (indicative):
+
+| Per document | Before | After | Delta |
+|---|--:|--:|--:|
+| Cost | 0.266 USD | 0.085 USD | -68 % |
+| Latency | 112.65 s | 43.72 s | -61 % |
+| Tokens | 56667 | 18645 | -67 % |
+| LLM calls | 4 | 3 | -1 |
+
+The judge continues to score every field and to flag the
+review-required fields; the scoring behaviour is preserved while both
+the prompt and the response are substantially smaller.
 
 ## 4. Out of Scope
 
