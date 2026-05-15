@@ -166,19 +166,27 @@ Issue and root cause (one representative session, trace
   evaluation against a curated dataset, which is out of scope
   (Pillar 2, section 4).
 
-### Lever 5: Shorten the judge user prompt (proposed, gated)
+### Lever 5: Shorten the judge user prompt (implemented, spot-check pending)
 
 - **Source:** Pillar 1, section 1.2 (token breakdown; the Control
   token volume sits in the user prompt, not the about 400-token
-  system prompt).
-- **What:** (a) remove the `buildJudgeSkeleton` echo, which duplicates
-  every field name already present in the extraction payload;
-  (b) serialise the extraction without pretty-print whitespace;
-  (c) do not trim the system-prompt rule list (the IBAN and vacation
-  hallucination guards are correctness guarantees).
-- **Status:** not implemented; (a) changes the output-schema
-  instruction and can affect judge JSON conformance, so it is gated on
-  the same judge-quality evaluation as Lever 4.
+  system prompt; the per-field skeleton echo was about 63 percent of
+  the judge text prompt, about 2300 of 3645 tokens).
+- **Fix:** `asklepios-control.ts`: (a) the per-field
+  `buildJudgeSkeleton` echo was removed and replaced by a constant,
+  field-count-independent `JUDGE_OUTPUT_SCHEMA` (one generic field
+  example plus an explicit instruction to mirror the EXTRAKTION keys);
+  (b) the extraction is serialised without pretty-print whitespace;
+  (c) the system-prompt rule list (IBAN and vacation hallucination
+  guards) was left unchanged.
+- **Effect:** judge text prompt about 3645 to about 1350 tokens per
+  run (about -63 percent), independent of field count.
+- **Status:** implemented in code. Because no curated judge-quality
+  dataset exists (Pillar 2, section 4), correctness is verified by a
+  spot-check: the same documents re-run, the Control span must still
+  return valid JSON covering every field with unchanged
+  `overall_status` and field scores. Until that spot-check passes the
+  lever is implemented but not quality-confirmed.
 
 Before/after example (real session, trace
 `019e2571-5010-7000-8000-008484ba15ec`; after-values projected from

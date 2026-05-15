@@ -63,33 +63,29 @@ Regeln:
 
 Format: Nur valides JSON. Keine Erklärungen. Kein Text vor oder nach dem JSON.`;
 
-function buildJudgeSkeleton(extractedData: Record<string, unknown>): string {
-  const sections = extractedData as Record<string, Record<string, unknown>>;
-  const skeleton: Record<string, Record<string, object>> = {};
-
-  for (const [section, fields] of Object.entries(sections)) {
-    if (!fields || typeof fields !== 'object') continue;
-    skeleton[section] = {};
-    for (const fieldName of Object.keys(fields as Record<string, unknown>)) {
-      skeleton[section][fieldName] = {
-        confidence: 'high|medium|low',
-        confidence_score: '0.0-1.0',
-        status: 'ok|review_required',
-        justification: '',
-        source_found: 'true|false',
-        source_quote: '',
-      };
+// Compact, field-count-independent output schema. Replaces the former
+// per-field skeleton echo (which duplicated every field of the extraction
+// a second time, ~63% of the judge prompt). One generic field example plus
+// the explicit instruction to mirror the EXTRAKTION keys is sufficient and
+// keeps JSON conformance explicit.
+const JUDGE_OUTPUT_SCHEMA = `{
+  "fields": {
+    "<sektion>": {
+      "<feldname>": {
+        "confidence": "high|medium|low",
+        "confidence_score": 0.0,
+        "status": "ok|review_required",
+        "justification": "",
+        "source_found": true,
+        "source_quote": ""
+      }
     }
-  }
-
-  return JSON.stringify({
-    fields: skeleton,
-    overall_confidence: '0.0-1.0',
-    overall_status: 'ok|review_required',
-    review_required_fields: ['section.field_name'],
-    summary: '',
-  }, null, 2);
-}
+  },
+  "overall_confidence": 0.0,
+  "overall_status": "ok|review_required",
+  "review_required_fields": ["sektion.feldname"],
+  "summary": ""
+}`;
 
 const JUDGE_USER_PROMPT = (
   originalText: string,
@@ -101,12 +97,16 @@ ${originalText}
 === ENDE ===
 
 === EXTRAKTION ===
-${JSON.stringify(extractedData, null, 2)}
+${JSON.stringify(extractedData)}
 === ENDE ===
 
-Format: Nur valides JSON. Bewerte jedes Feld der Extraktion einzeln.
+Format: Nur valides JSON, exakt nach diesem Schema:
 
-${buildJudgeSkeleton(extractedData)}`;
+${JUDGE_OUTPUT_SCHEMA}
+
+Repliziere unter "fields" JEDE Sektion und JEDES Feld aus der EXTRAKTION
+oben mit identischen Schlüsseln, jeweils mit dem obigen Bewertungsobjekt.
+Kein Feld auslassen, keine Felder hinzufügen. Kein Text vor oder nach dem JSON.`;
 
 function getApiKey(): string | null {
   return import.meta.env.VITE_OPENROUTER_API_KEY || null;
