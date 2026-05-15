@@ -24,7 +24,7 @@ covered in its own section.
 | Self-defined Custom Evals | LLM-as-a-Judge | implemented | §2.1 |
 | Self-defined Custom Evals | Code-based Custom Metrics | implemented | §2.2 |
 | Self-defined Custom Evals | Business Metrics | implemented (Cost / Run) | §2.3 |
-| Runtime Monitoring | Policy Enforcement | configured (Latency verified; Cost pending) | §1.5, §3 |
+| Runtime Monitoring | Policy Enforcement | configured (Latency & Cost verified) | §1.5, §3 |
 | Runtime Monitoring | Agent metrics dashboard | implemented (LangSmith UI) | §3 |
 | Build-time Tools, Agent Benchmarking, Data Set Curation | – | out-of-scope | §4 |
 
@@ -119,24 +119,36 @@ testable end-to-end independently of an actual threshold breach.
 
 The LangSmith platform alert API is in alpha and proved unreliable
 for programmatic creation (HTTP 200 without persistence, undocumented
-required fields). The alert rules were therefore created through the
-LangSmith UI (Monitoring → Alerts). Figure 1 shows the "Latency Cap"
-configuration. The delivery chain was verified end-to-end via a
-manual webhook invocation; Figure 2 shows the resulting delivered
-notification.
+required fields). Both alert rules were therefore created through the
+LangSmith UI (Monitoring → Alerts): Figure 1 shows the "Latency Cap"
+configuration, Figure 3 the "Cost Cap" configuration. For each, the
+delivery chain was verified end-to-end via a manual webhook
+invocation; Figure 2 and Figure 4 show the resulting delivered
+notifications.
 
-![Figure 1 (illustrative example): LangSmith alert configuration "Latency Cap"](img/latency-cap-config.png)
+![Figure 1: LangSmith alert configuration "Latency Cap"](img/latency-cap-config.png)
 
-*Figure 1 — Illustrative example: LangSmith alert configuration "Latency Cap".*
+*Figure 1 — LangSmith alert configuration "Latency Cap".*
 
-![Figure 2 (illustrative example): Alert notification delivered via relay.app](img/latency-cap-mail.png)
+![Figure 2: Latency Cap notification delivered via relay.app](img/latency-cap-mail.png)
 
-*Figure 2 — Illustrative example: alert notification delivered via relay.app.*
+*Figure 2 — Latency Cap alert notification delivered via relay.app.*
+
+![Figure 3: LangSmith alert configuration "Cost Cap"](img/cost-cap-config.png)
+
+*Figure 3 — LangSmith alert configuration "Cost Cap": project
+`AgenticAI V2`, metric Cost, total LLM cost ≥ 50 USD over a 60-minute
+window, same relay.app webhook action as the Latency Cap.*
+
+![Figure 4: Cost Cap notification delivered via relay.app](img/cost-cap-mail.png)
+
+*Figure 4 — Cost Cap alert notification delivered via relay.app
+(end-to-end verification; observed value 51.2 USD ≥ 50 USD threshold).*
 
 **Status**
 
 - **Latency Cap:** configured and verified end-to-end.
-- **Cost Cap:** identical pattern, creation pending.
+- **Cost Cap:** configured and verified end-to-end.
 
 At the current run volume (single digits) the windowed average is of
 limited significance; the mechanism is nonetheless fully established
@@ -167,7 +179,7 @@ call and are therefore stable and reproducible.
 ### 2.3 Business Metric — Cost per Run
 
 Cost per Run is read directly from the LangSmith dashboard — the
-"Cost per Trace" panel of the Cost & Tokens tab (§1.4; Figure 4). It
+"Cost per Trace" panel of the Cost & Tokens tab (§1.4; Figure 6). It
 serves as the business metric without an additional definition or
 pipeline.
 
@@ -180,29 +192,29 @@ webhook → relay.app → email — is established and verified
 independently of an actual breach.
 
 The agent metrics dashboard aggregates the run-time metrics of §1.4
-over a selectable time window. It is organised in tabs; Figures 3–6
+over a selectable time window. It is organised in tabs; Figures 5–8
 show the four substantive tabs for the project `AgenticAI V2`.
 
-![Figure 3: LangSmith agent metrics dashboard — Traces tab](img/dashboard-traces.png)
+![Figure 5: LangSmith agent metrics dashboard — Traces tab](img/dashboard-traces.png)
 
-*Figure 3 — Traces tab: trace count, trace latency percentiles (P50 /
+*Figure 5 — Traces tab: trace count, trace latency percentiles (P50 /
 P99), and trace error rate over time.*
 
-![Figure 4: LangSmith agent metrics dashboard — LLM Calls and Cost & Tokens tabs](img/dashboard-llm-cost.png)
+![Figure 6: LangSmith agent metrics dashboard — LLM Calls and Cost & Tokens tabs](img/dashboard-llm-cost.png)
 
-*Figure 4 — LLM Calls and Cost & Tokens tabs: LLM call count, LLM
+*Figure 6 — LLM Calls and Cost & Tokens tabs: LLM call count, LLM
 latency percentiles, total cost, and median cost per trace over time.
 The "Cost per Trace" panel is the direct source of the Cost per Run
 business metric (§1.4, §2.3).*
 
-![Figure 5: LangSmith agent metrics dashboard — Tools tab](img/dashboard-tools.png)
+![Figure 7: LangSmith agent metrics dashboard — Tools tab](img/dashboard-tools.png)
 
-*Figure 5 — Tools tab: run count, median latency, and error rate per
+*Figure 7 — Tools tab: run count, median latency, and error rate per
 tool over time (here: `contract_data_submission`).*
 
-![Figure 6: LangSmith agent metrics dashboard — Run Types tab](img/dashboard-runtypes.png)
+![Figure 8: LangSmith agent metrics dashboard — Run Types tab](img/dashboard-runtypes.png)
 
-*Figure 6 — Run Types tab: median latency and error rate per run name
+*Figure 8 — Run Types tab: median latency and error rate per run name
 at depth = 1 (Dokumentklassifizierung, Qualitätsprüfung,
 Datenextraktion), plus the Feedback Scores section.*
 
