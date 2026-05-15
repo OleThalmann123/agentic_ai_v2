@@ -40,6 +40,7 @@ import {
   isLangSmithEnabled,
   setPipelineLangSmithRoot,
   setPipelineLangSmithSessionId,
+  flushLangSmithClient,
 } from './langsmith';
 import { getExtractorModelName, getJudgeModelName, getClassifierModelName } from './model-config';
 
@@ -140,11 +141,17 @@ async function runDocumentPipelineImpl(
     let toolCalls: string[] = [];
 
     if (images && images.length > 0) {
-      const extracted = await extractContractFromImages(images);
+      const extracted = await extractContractFromImages(
+        images,
+        classificationResult.language,
+      );
       rawResult = extracted.raw;
       toolCalls = extracted.toolCalls;
     } else {
-      const extracted = await extractContractData(documentText);
+      const extracted = await extractContractData(
+        documentText,
+        classificationResult.language,
+      );
       rawResult = extracted.raw;
       toolCalls = extracted.toolCalls;
     }
@@ -333,10 +340,9 @@ export async function runDocumentPipeline(
   } finally {
     setPipelineLangSmithRoot(null);
     setPipelineLangSmithSessionId(null);
-    if (client && typeof (client as { awaitPendingTraceBatches?: () => Promise<void> }).awaitPendingTraceBatches === 'function') {
-      await (client as { awaitPendingTraceBatches: () => Promise<void> })
-        .awaitPendingTraceBatches()
-        .catch(() => {});
-    }
+    // Drain the shared client (RunTree + callback tracer) unconditionally,
+    // on success and error, so child spans are flushed before teardown
+    // instead of being left as `pending` runs in LangSmith.
+    await flushLangSmithClient();
   }
 }

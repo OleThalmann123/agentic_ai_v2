@@ -24,6 +24,7 @@ import type { JudgeFieldResult } from './asklepios-control';
 import {
   DEFAULT_EXTRACTOR_MODEL,
   getExtractorModelName,
+  cachedSystemMessage,
 } from './model-config';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1';
@@ -348,12 +349,18 @@ async function runAgentWithTools(
   model: ChatOpenAI,
   messages: Array<SystemMessage | HumanMessage>,
   documentMode: 'text' | 'vision' = 'text',
+  documentLanguage: string = 'de',
 ): Promise<{ raw: RawExtractionResult; toolCalls: string[] }> {
   const toolCalls: string[] = [];
   const MAX_TOOL_ROUNDS = 3;
 
   // Capture the tool-validated data from contract_data_submission
   let toolValidatedData: RawExtractionResult['contracts'] | null = null;
+  // Capture the parsed tool envelope (validation_errors / corrections_applied)
+  // so extraction_metadata.warnings can be derived without a second LLM turn.
+  let toolResultParsed:
+    | { validation_errors?: string[]; corrections_applied?: string[] }
+    | null = null;
 
   const modelWithTools = model.bindTools(agentTools);
 
@@ -404,6 +411,7 @@ async function runAgentWithTools(
           const parsed = JSON.parse(toolResultString);
           if (parsed.data && (parsed.status === 'success' || parsed.status === 'warning')) {
             toolValidatedData = parsed.data;
+            toolResultParsed = parsed;
           }
         } catch {
           throw new Error(
@@ -419,6 +427,13 @@ async function runAgentWithTools(
       } as any);
     }
 
+    // A successful contract_data_submission is the authoritative, terminal
+    // result. The tool returns the validated/normalised `data`; a further
+    // model turn would only re-serialise it and contribute no new
+    // information (Double Call). extraction_metadata is derived
+    // deterministically below, so the second invoke is skipped.
+    if (toolValidatedData) break;
+
     response = await modelWithTools.invoke(
       allMessages,
       await getLangSmithInvokeConfig('asklepios-extractor', {
@@ -428,23 +443,6 @@ async function runAgentWithTools(
     allMessages.push(response);
   }
 
-  if (round >= MAX_TOOL_ROUNDS && response.tool_calls && response.tool_calls.length > 0) {
-    console.warn(`[Asklepios Extractor] Tool-calling limit reached (${MAX_TOOL_ROUNDS} rounds). Forcing final response.`);
-    const forceModel = getModel(
-      import.meta.env.VITE_OPENROUTER_API_KEY!,
-      getExtractorModelName(),
-    );
-    response = await forceModel.invoke(
-      allMessages,
-      await getLangSmithInvokeConfig('asklepios-extractor', {
-        mode: `${documentMode}-forced-final`,
-      }),
-    );
-  }
-
-  // LLM final response has extraction_metadata + contracts in correct format
-  const llmParsed = parseResponse(response.content as string);
-
   // MANDATORY: Tool must have been called for validation to run.
   if (!toolCalls.includes('contract_data_submission')) {
     throw new Error(
@@ -453,14 +451,45 @@ async function runAgentWithTools(
   }
 
   if (!toolValidatedData) {
+    // Cap reached without a successful submission (all rounds error). Keep
+    // the forced-final call as a diagnostic fallback so the failure is
+    // visible in the trace, then fail explicitly.
+    if (round >= MAX_TOOL_ROUNDS && response.tool_calls && response.tool_calls.length > 0) {
+      console.warn(`[Asklepios Extractor] Tool-calling limit reached (${MAX_TOOL_ROUNDS} rounds). Forcing final response.`);
+      const forceModel = getModel(
+        import.meta.env.VITE_OPENROUTER_API_KEY!,
+        getExtractorModelName(),
+      );
+      response = await forceModel.invoke(
+        allMessages,
+        await getLangSmithInvokeConfig('asklepios-extractor', {
+          mode: `${documentMode}-forced-final`,
+        }),
+      );
+      parseResponse(response.content as string);
+    }
     throw new Error(
       'Asklepios Extractor: contract_data_submission lieferte keine validierten Daten (data fehlt oder status weder success noch warning).',
     );
   }
 
+  // extraction_metadata is derived deterministically from the tool result
+  // (no second LLM turn): language from the classifier, field counts from
+  // the validated data, warnings from the tool envelope.
+  const { extracted, missing } = countExtractionFields(toolValidatedData);
+  const warnings = [
+    ...(toolResultParsed?.validation_errors ?? []),
+    ...(toolResultParsed?.corrections_applied ?? []),
+  ];
+
   return {
     raw: {
-      extraction_metadata: llmParsed.extraction_metadata,
+      extraction_metadata: {
+        document_language: documentLanguage,
+        fields_extracted: extracted,
+        fields_missing: missing,
+        warnings,
+      },
       contracts: toolValidatedData as RawExtractionResult['contracts'],
     },
     toolCalls,
@@ -468,10 +497,34 @@ async function runAgentWithTools(
 }
 
 /**
+ * Count leaf extraction fields with a present value vs. missing value,
+ * over the five contract sections. Deterministic; replaces the
+ * field counters that the redundant final LLM turn used to produce.
+ */
+function countExtractionFields(
+  data: RawExtractionResult['contracts'],
+): { extracted: number; missing: number } {
+  let extracted = 0;
+  let missing = 0;
+  for (const section of Object.values(data ?? {})) {
+    if (!section || typeof section !== 'object') continue;
+    for (const field of Object.values(
+      section as Record<string, RawExtractionField>,
+    )) {
+      const v = field?.value;
+      if (v !== null && v !== undefined && v !== '') extracted++;
+      else missing++;
+    }
+  }
+  return { extracted, missing };
+}
+
+/**
  * Extract contract data from TEXT content (Agent 1).
  */
 export async function extractContractData(
   contractText: string,
+  documentLanguage: string = 'de',
 ): Promise<{ raw: RawExtractionResult; toolCalls: string[] }> {
   const apiKey = getApiKey();
   if (!apiKey) {
@@ -483,10 +536,11 @@ export async function extractContractData(
   return runAgentWithTools(
     model,
     [
-      new SystemMessage(SYSTEM_PROMPT),
+      cachedSystemMessage(SYSTEM_PROMPT),
       new HumanMessage(USER_PROMPT_TEMPLATE(contractText)),
     ],
     'text',
+    documentLanguage,
   );
 }
 
@@ -498,6 +552,7 @@ export async function extractContractData(
  */
 export async function extractContractFromImages(
   images: string[],
+  documentLanguage: string = 'de',
 ): Promise<{ raw: RawExtractionResult; toolCalls: string[] }> {
   const userContent: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
     {
@@ -520,10 +575,11 @@ export async function extractContractFromImages(
   return runAgentWithTools(
     model,
     [
-      new SystemMessage(SYSTEM_PROMPT),
+      cachedSystemMessage(SYSTEM_PROMPT),
       new HumanMessage({ content: userContent }),
     ],
     'vision',
+    documentLanguage,
   );
 }
 

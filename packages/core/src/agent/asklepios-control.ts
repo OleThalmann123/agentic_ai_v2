@@ -17,9 +17,9 @@
  */
 
 import { ChatOpenAI } from '@langchain/openai';
-import { SystemMessage, HumanMessage } from '@langchain/core/messages';
+import { HumanMessage } from '@langchain/core/messages';
 import { getLangSmithInvokeConfig } from './langsmith';
-import { getJudgeModelName } from './model-config';
+import { getJudgeModelName, cachedSystemMessage } from './model-config';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1';
 
@@ -300,7 +300,7 @@ export async function runJudge(
 
   const response = await model.invoke(
     [
-      new SystemMessage(JUDGE_SYSTEM_PROMPT),
+      cachedSystemMessage(JUDGE_SYSTEM_PROMPT),
       userMessage,
     ],
     await getLangSmithInvokeConfig('asklepios-control', {

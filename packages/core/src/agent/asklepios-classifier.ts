@@ -14,9 +14,9 @@
  */
 
 import { ChatOpenAI } from '@langchain/openai';
-import { SystemMessage, HumanMessage } from '@langchain/core/messages';
+import { HumanMessage } from '@langchain/core/messages';
 import { getLangSmithInvokeConfig } from './langsmith';
-import { getClassifierModelName } from './model-config';
+import { getClassifierModelName, cachedSystemMessage } from './model-config';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1';
 
@@ -125,7 +125,7 @@ export async function classifyDocument(
 
   const response = await model.invoke(
     [
-      new SystemMessage(CLASSIFIER_SYSTEM_PROMPT),
+      cachedSystemMessage(CLASSIFIER_SYSTEM_PROMPT),
       new HumanMessage(CLASSIFIER_USER_PROMPT(documentText)),
     ],
     await getLangSmithInvokeConfig('asklepios-classifier', { mode: 'text' }),
@@ -184,7 +184,7 @@ export async function classifyDocumentFromImages(
 
   const response = await model.invoke(
     [
-      new SystemMessage(CLASSIFIER_SYSTEM_PROMPT),
+      cachedSystemMessage(CLASSIFIER_SYSTEM_PROMPT),
       new HumanMessage({ content: userContent }),
     ],
     await getLangSmithInvokeConfig('asklepios-classifier', { mode: 'vision' }),

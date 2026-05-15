@@ -89,6 +89,113 @@ Cap (Pillar 2, section 1.5) provide the production signal that would
 trigger a future retuning of these levers; they are configured and
 verified, but the retuning loop itself is out of scope (section 4).
 
+## 3. Applied Optimization Levers
+
+Sections 1 and 2 describe insight access and design-time levers. This
+section records the levers that were executed as a closed
+Observe -> Evaluate -> Optimize cycle: a signal observed in the
+Observability pillar, a root cause identified, a fix applied in code,
+and a projected before/after stated for verification by re-run. This
+is the first loop closure; it remains bounded by section 4 (no curated
+baseline, single-digit volume), so effects are stated as measured
+deltas against the pipeline's own necessary-work floor, not against an
+external benchmark.
+
+Issue and root cause (whole-agent level, 5 of 5 clean sessions,
+project `AgenticAI V2`, sweep 2026-05-15):
+
+- **Issue 1, runtime cost and duration per document.** Per session
+  about 0.20 to 0.27 USD, about 110 s, about 47 k tokens, 4 LLM calls;
+  the necessary-work floor is about 0.13 to 0.18 USD, about 86 s,
+  about 31 k tokens, 3 LLM calls. Root cause: the Extractor loop did
+  not treat a successful `contract_data_submission` as terminal and
+  forced a further model turn that only re-serialised the validated
+  tool output (Pillar 1, section 1.3.3).
+- **Issue 2, metric integrity.** Only 5 of 7 traces finalised
+  (about 71 percent); the Cost and Latency Cap aggregates (Pillar 2,
+  section 1.5) were computed over incomplete sessions. Root cause: the
+  LangChain callback tracer batches were not awaited on teardown.
+
+### Lever 1: Eliminate the redundant Extractor round (implemented)
+
+- **Source:** Pillar 1, section 1.3.3 (Root Cause Analysis; span
+  reading via Claude Code and the `langsmith` CLI).
+- **Fix:** `packages/core/src/agent/asklepios-extractor.ts`,
+  `runAgentWithTools`: a successful `contract_data_submission` breaks
+  the loop before the second model invoke; `extraction_metadata` is
+  derived deterministically (`countExtractionFields`, classifier
+  language, tool envelope warnings) instead of from a second LLM pass.
+- **Effect per document:** about -0.07 USD, about -24 s, about -50 %
+  Extractor tokens, 4 -> 3 LLM calls. No quality effect: `contracts`
+  always derived solely from the tool.
+
+### Lever 2: Flush the callback tracer on teardown (implemented)
+
+- **Source:** Pillar 1, sections 1.1 and 1.2 (pending and truncated
+  traces distorting the metric layer).
+- **Fix:** `flushLangSmithClient()` (`agent/langsmith.ts`) is awaited
+  unconditionally in the `pipeline.ts` `finally` block, draining the
+  shared client used by both the RunTree and the callback tracer.
+- **Effect:** trace completeness about 71 percent to about 100 percent;
+  the Cap aggregates of Pillar 2, section 1.5 become trustworthy.
+
+### Lever 3: Prompt caching on the static system prompts (implemented)
+
+- **Source:** Pillar 1, section 1.2 (token detail fields show
+  `cache_read = 0`; the static per-agent system prompt is re-sent
+  verbatim every run).
+- **Fix:** `cachedSystemMessage` (`model-config.ts`) marks the static
+  system prompt of all three agents (Classifier, Extractor, Control)
+  as an ephemeral cache breakpoint; the per-document user prompt stays
+  uncached. Inert if a provider ignores `cache_control` (no
+  behavioural or quality change).
+- **Effect:** removes the static system-prompt input-token cost on
+  cache hits across all three agents.
+
+### Lever 4: Cheaper Control judge model (proposed, gated)
+
+- **Source:** Pillar 1, section 1.2 (cost breakdown; Control is the
+  slowest single span, about 0.05 USD per document).
+- **What:** set `DEFAULT_JUDGE_MODEL` or `VITE_OPENROUTER_JUDGE_MODEL`
+  (`model-config.ts`) to `anthropic/claude-haiku-4.5`, the mechanism
+  already used by the Classifier.
+- **Status:** not implemented. It moves the LLM-as-Judge gate
+  (`overall_confidence >= 0.8`, Pillar 2, section 2.1) and the
+  Human-on-the-Loop boundary, so it requires a judge-quality
+  evaluation against a curated dataset, which is out of scope
+  (Pillar 2, section 4).
+
+### Lever 5: Shorten the judge user prompt (proposed, gated)
+
+- **Source:** Pillar 1, section 1.2 (token breakdown; the Control
+  token volume sits in the user prompt, not the about 400-token
+  system prompt).
+- **What:** (a) remove the `buildJudgeSkeleton` echo, which duplicates
+  every field name already present in the extraction payload;
+  (b) serialise the extraction without pretty-print whitespace;
+  (c) do not trim the system-prompt rule list (the IBAN and vacation
+  hallucination guards are correctness guarantees).
+- **Status:** not implemented; (a) changes the output-schema
+  instruction and can affect judge JSON conformance, so it is gated on
+  the same judge-quality evaluation as Lever 4.
+
+Before/after example (real session, trace
+`019e2571-5010-7000-8000-008484ba15ec`; after-values projected from
+the directly measured redundant span, to be replaced by a re-run
+measurement):
+
+| Metric | Before | After (projected, Lever 1) |
+|---|--:|--:|
+| Cost per document | 0.266 USD | about 0.183 USD (-31 %) |
+| Latency per document | 112.65 s | about 89 s (-21 %) |
+| LLM calls | 4 | 3 |
+
+Verification of the applied levers 1 to 3: re-run the same document
+and pull a fresh trace; expect exactly three LLM spans, no second
+Extractor span, `contracts` identical to the prior trace (no quality
+regression), trace status finalised with no `pending` child runs, and
+`cache_read` greater than zero on repeat runs.
+
 ## 4. Out of Scope
 
 The continuous, closed Optimization Loop and its remaining sub-items

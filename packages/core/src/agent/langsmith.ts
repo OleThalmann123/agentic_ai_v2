@@ -251,6 +251,22 @@ export function getLangSmithTracer(): LangChainTracer | null {
 }
 
 /**
+ * Drain the shared LangSmith client used by BOTH the pipeline RunTree and
+ * the LangChain callback tracer (single `_client` singleton). Awaiting this
+ * on every pipeline exit ensures child spans submitted by the callback
+ * tracer are flushed before teardown, instead of relying on a guarded
+ * local client reference. Safe to call when tracing is disabled.
+ */
+export async function flushLangSmithClient(): Promise<void> {
+  const client = _client as
+    | (Client & { awaitPendingTraceBatches?: () => Promise<void> })
+    | null;
+  if (client && typeof client.awaitPendingTraceBatches === 'function') {
+    await client.awaitPendingTraceBatches().catch(() => {});
+  }
+}
+
+/**
  * Get callbacks config for LLM invocations.
  * Includes tracer + run metadata so alle drei Pipeline-Agenten in LangSmith
  * filterbar sind (tags agent-1/2/3, metadata pipeline_step, agent_role).
