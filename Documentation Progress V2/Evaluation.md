@@ -75,18 +75,31 @@ Monitoring).
 |---|---|---|
 | Metric | average trace latency | average cost |
 | Operator | ≥ (greater than or equal to) | ≥ |
-| Threshold | 170 seconds | 0.40 USD |
+| Threshold | 170 seconds | 50 USD |
 | Aggregation window | 60 minutes | 60 minutes |
 | Scope filter | project `AgenticAI V2` | project `AgenticAI V2` |
 | Notification | webhook → relay.app | webhook → relay.app |
 
-The thresholds are defined as 1.5× the metrics of the most recent
-production reference trace (baseline: 112.66 s / 0.2665 USD; trace of
-14.05.2026, 09:44). The 1.5 factor tolerates normal variance and only
-fires on pronounced outliers. As the reference trace was itself a
-failure case (tags `tool_loop_capped`, `tool_schema_fail`), the
-resulting threshold is deliberately conservative; re-calibration
-against a clean reference run is foreseen.
+The two thresholds follow deliberately different design intents.
+
+The **Latency Cap** is defined as 1.5× the latency of the most recent
+production reference trace (baseline: 112.66 s; trace of 14.05.2026,
+09:44). The 1.5 factor tolerates normal variance and only fires on
+pronounced outliers. As the reference trace was itself a failure case
+(tags `tool_loop_capped`, `tool_schema_fail`), the resulting threshold
+is deliberately conservative; re-calibration against a clean reference
+run is foreseen.
+
+The **Cost Cap** is intentionally *not* derived from a reference
+trace. It is a flat circuit-breaker set to 50 USD average cost per
+run. A single extraction run costs cents (baseline reference: 0.2665
+USD), so this ceiling is orders of magnitude above normal operation
+and is never reached by correct use. Its sole purpose is to guarantee
+that future tests or usages cannot drive the agent into excessively
+frequent or runaway invocation and thereby generate unpredictable,
+unbounded cost. The cap is therefore a cost-safety guardrail, not an
+outlier-sensitivity metric: it accepts wide normal variance and fires
+only on a gross, unaccounted-for cost escalation.
 
 **Architecture and data flow**
 
@@ -153,7 +166,8 @@ call and are therefore stable and reproducible.
 
 ### 2.3 Business Metric — Cost per Run
 
-Cost per Run is read directly from the LangSmith dashboard (§1.4). It
+Cost per Run is read directly from the LangSmith dashboard — the
+"Cost per Trace" panel of the Cost & Tokens tab (§1.4; Figure 4). It
 serves as the business metric without an additional definition or
 pipeline.
 
@@ -164,6 +178,33 @@ dashboard, run and trace views) together with the policy-enforcement
 alerts described in §1.5. The alert chain — LangSmith threshold →
 webhook → relay.app → email — is established and verified
 independently of an actual breach.
+
+The agent metrics dashboard aggregates the run-time metrics of §1.4
+over a selectable time window. It is organised in tabs; Figures 3–6
+show the four substantive tabs for the project `AgenticAI V2`.
+
+![Figure 3: LangSmith agent metrics dashboard — Traces tab](img/dashboard-traces.png)
+
+*Figure 3 — Traces tab: trace count, trace latency percentiles (P50 /
+P99), and trace error rate over time.*
+
+![Figure 4: LangSmith agent metrics dashboard — LLM Calls and Cost & Tokens tabs](img/dashboard-llm-cost.png)
+
+*Figure 4 — LLM Calls and Cost & Tokens tabs: LLM call count, LLM
+latency percentiles, total cost, and median cost per trace over time.
+The "Cost per Trace" panel is the direct source of the Cost per Run
+business metric (§1.4, §2.3).*
+
+![Figure 5: LangSmith agent metrics dashboard — Tools tab](img/dashboard-tools.png)
+
+*Figure 5 — Tools tab: run count, median latency, and error rate per
+tool over time (here: `contract_data_submission`).*
+
+![Figure 6: LangSmith agent metrics dashboard — Run Types tab](img/dashboard-runtypes.png)
+
+*Figure 6 — Run Types tab: median latency and error rate per run name
+at depth = 1 (Dokumentklassifizierung, Qualitätsprüfung,
+Datenextraktion), plus the Feedback Scores section.*
 
 ## 4. Out of Scope
 
