@@ -101,9 +101,9 @@ export function ExtractingScreen({ onCancel, pipelineDone = false, onReadyForRev
         <div className="flex items-center justify-between gap-4">
           <Badge
             variant="outline"
-            className="border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70"
+            className="w-fit border-white/15 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70"
           >
-            Agentic Workflow aktiv · Kann bis zu 5 Minuten dauern.
+            Agentic Workflow aktiv
           </Badge>
           <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/15 bg-white/10">
             <AsklepiosExtractLogo className="h-6 w-6 text-white" />

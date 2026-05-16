@@ -28,7 +28,13 @@ const formatAIWarning = (code: string) => {
     'UNVOLLSTAENDIGE_ADRESSE': 'Adresse der Assistenzperson ist unvollständig',
     'LOHN_NICHT_ERKANNT': 'Bruttolohn konnte nicht eindeutig bestimmt werden'
   };
-  return map[code] || code.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+  if (map[code]) return map[code];
+  // Only transform all-caps enum codes (e.g. SOME_CODE); pass pre-formatted strings through unchanged
+  // to avoid mangling German umlauts with JS word-boundary title-casing.
+  if (/^[A-Z][A-Z0-9_]+$/.test(code)) {
+    return code.replace(/_/g, ' ').toLowerCase().replace(/^\w/, l => l.toUpperCase());
+  }
+  return code;
 };
 const REQUIRED_FIELDS = [
   'firstName',
