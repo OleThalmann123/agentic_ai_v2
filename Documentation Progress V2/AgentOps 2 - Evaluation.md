@@ -6,9 +6,7 @@
 
 This document maps the Evaluation pillar of the watsonx Orchestrate
 AgentOps framework (*LU09 - Managing Risk of AI Agents*, Slide 41) onto
-the implemented state of the Asklepios document pipeline. It builds on
-the Observability pillar (Pillar 1 document) and references its
-components where they also serve evaluation. The pillar comprises six
+the implemented state of the Asklepios document pipeline. The pillar comprises six
 framework cells: OOTB Pre-defined Evals, Self-defined Custom Evals,
 Build-time Tools, Runtime Monitoring, Agent Benchmarking, and Data Set
 Curation. Each cell with an implemented or configured sub-item is
@@ -57,7 +55,7 @@ Code-based Custom Metric of section 2.2 through the same mechanism.
 ### 1.2 Tool Whitelist (Guardrail)
 
 The Extractor operates against a closed tool registry; calls outside
-this set are structurally impossible. The risk class Tool Choice
+this set are structurally not possible. The risk class Tool Choice
 Hallucination is therefore eliminated by construction rather than
 detected after the fact.
 
@@ -162,9 +160,9 @@ threshold.*
 
 **Status**
 
-Both caps are configured and verified end-to-end. At the current run
+Both caps are configured and tested. At the current run
 volume (single digits) the windowed average has limited statistical
-significance; the mechanism is nonetheless fully established and
+significance. The mechanism is nonetheless fully established and
 scales without further change as volume grows.
 
 ## 2. Self-defined Custom Evals
