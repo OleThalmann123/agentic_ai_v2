@@ -51,7 +51,7 @@ as the dominant issues.
 This is evidenced by the worked trace of 2026-05-13: a representative
 session cost 0.266 USD over 112.65 s across 4 LLM calls; the redundant
 second Extractor span (the "Double Call") alone accounted for about
-0.083 USD and about 24 s — roughly one third of the pipeline cost —
+0.083 USD and about 24 s (roughly one third of the pipeline cost)
 with no information gain (Pillar 1, section 1.3.3). Cost and latency
 are thereby verified as the dominant, addressable issues directly
 against the trace material.
