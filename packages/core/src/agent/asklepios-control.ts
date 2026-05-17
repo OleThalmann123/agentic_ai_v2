@@ -17,19 +17,22 @@
  */
 
 import { ChatOpenAI } from '@langchain/openai';
-import { SystemMessage, HumanMessage } from '@langchain/core/messages';
+import { HumanMessage } from '@langchain/core/messages';
 import { getLangSmithInvokeConfig } from './langsmith';
-import { getJudgeModelName } from './model-config';
+import { getJudgeModelName, cachedSystemMessage } from './model-config';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1';
 
 export interface JudgeFieldResult {
-  confidence: 'high' | 'medium' | 'low';
   confidence_score: number;
-  status: 'ok' | 'review_required';
-  justification: string;
-  source_found: boolean;
-  source_quote: string;
+  // Optional: the judge response is now minimal (confidence_score only).
+  // These remain optional for backward compatibility with older traces
+  // and a tolerant parser; they are no longer requested or consumed.
+  confidence?: 'high' | 'medium' | 'low';
+  status?: 'ok' | 'review_required';
+  justification?: string;
+  source_found?: boolean;
+  source_quote?: string;
 }
 
 export interface JudgeResult {
@@ -45,51 +48,38 @@ const JUDGE_SYSTEM_PROMPT = `Du bist ein erfahrener Qualitätsprüfer für Daten
 Schritte:
 1. Lies den Originalvertrag vollständig.
 2. Vergleiche JEDES Feld der Extraktion mit dem Originaltext.
-3. Vergib pro Feld einen confidence_score (0.0–1.0) nach diesen Kriterien:
-   - 0.85–1.0 (high): Wert steht explizit und eindeutig im Vertrag.
-   - 0.50–0.84 (medium): Wert interpretiert, abgeleitet oder teilweise korrekt.
-   - 0.00–0.49 (low): Wert fehlt, falsch extrahiert oder widersprüchlich.
-4. Setze status: "ok" wenn score >= 0.8, sonst "review_required".
-5. Zitiere die relevante Stelle aus dem Vertrag in source_quote.
+3. Vergib pro Feld einen confidence_score (0.0 bis 1.0) nach diesen Kriterien:
+   - 0.85 bis 1.0: Wert steht explizit und eindeutig im Vertrag.
+   - 0.50 bis 0.84: Wert interpretiert, abgeleitet oder teilweise korrekt.
+   - 0.00 bis 0.49: Wert fehlt, falsch extrahiert oder widersprüchlich.
 
 Regeln:
-- Sei streng: lieber einmal zu viel "review_required" als einen Fehler durchlassen.
+- Sei streng: lieber einmal einen zu niedrigen Score als einen Fehler durchlassen.
 - Wert null + Feld nicht im Vertrag = korrekt (0.95).
 - Wert null + Feld steht im Vertrag = Fehler (0.2).
 - Wert gesetzt + KEIN wörtliches Zitat im Vertrag auffindbar = Halluzination (0.1). Besonders kritisch bei: vacation_weeks, holiday_supplement_pct, notice_period_days, payment_iban. Wenn das Wort "Ferien" nirgends im Vertrag vorkommt, MUSS vacation_weeks null sein. Wenn die IBAN nicht als zusammenhängende Zeichenfolge im Vertragstext auffindbar ist, MUSS payment_iban als Halluzination (0.1) markiert werden.
 - Geschlecht: niemals aus Name ableiten. Null ist korrekt (0.95).
-- ISO-Übersetzungen erlaubt: "Schweiz" = CH = korrekt (high).
-- justification ist rein intern (Audit/Trace), nicht für Endbenutzer.
+- ISO-Übersetzungen erlaubt: "Schweiz" = CH = korrekt (hoher Score).
+
+Pro Feld gibst du AUSSCHLIESSLICH { "confidence_score": <0.0 bis 1.0> } aus: keine justification, kein source_quote, kein status, kein source_found, kein confidence.
 
 Format: Nur valides JSON. Keine Erklärungen. Kein Text vor oder nach dem JSON.`;
 
-function buildJudgeSkeleton(extractedData: Record<string, unknown>): string {
-  const sections = extractedData as Record<string, Record<string, unknown>>;
-  const skeleton: Record<string, Record<string, object>> = {};
-
-  for (const [section, fields] of Object.entries(sections)) {
-    if (!fields || typeof fields !== 'object') continue;
-    skeleton[section] = {};
-    for (const fieldName of Object.keys(fields as Record<string, unknown>)) {
-      skeleton[section][fieldName] = {
-        confidence: 'high|medium|low',
-        confidence_score: '0.0-1.0',
-        status: 'ok|review_required',
-        justification: '',
-        source_found: 'true|false',
-        source_quote: '',
-      };
+// Minimal, field-count-independent output schema. Per field only
+// confidence_score is requested (everything else was unused downstream
+// or recomputed locally), which removes the bulk of the judge response
+// (per-field justification/source_quote free text was ~35% of output).
+const JUDGE_OUTPUT_SCHEMA = `{
+  "fields": {
+    "<sektion>": {
+      "<feldname>": { "confidence_score": 0.0 }
     }
-  }
-
-  return JSON.stringify({
-    fields: skeleton,
-    overall_confidence: '0.0-1.0',
-    overall_status: 'ok|review_required',
-    review_required_fields: ['section.field_name'],
-    summary: '',
-  }, null, 2);
-}
+  },
+  "overall_confidence": 0.0,
+  "overall_status": "ok|review_required",
+  "review_required_fields": ["sektion.feldname"],
+  "summary": ""
+}`;
 
 const JUDGE_USER_PROMPT = (
   originalText: string,
@@ -101,12 +91,16 @@ ${originalText}
 === ENDE ===
 
 === EXTRAKTION ===
-${JSON.stringify(extractedData, null, 2)}
+${JSON.stringify(extractedData)}
 === ENDE ===
 
-Format: Nur valides JSON. Bewerte jedes Feld der Extraktion einzeln.
+Format: Nur valides JSON, exakt nach diesem Schema:
 
-${buildJudgeSkeleton(extractedData)}`;
+${JUDGE_OUTPUT_SCHEMA}
+
+Repliziere unter "fields" JEDE Sektion und JEDES Feld aus der EXTRAKTION
+oben mit identischen Schlüsseln, jeweils mit dem obigen Bewertungsobjekt.
+Kein Feld auslassen, keine Felder hinzufügen. Kein Text vor oder nach dem JSON.`;
 
 function getApiKey(): string | null {
   return import.meta.env.VITE_OPENROUTER_API_KEY || null;
@@ -300,7 +294,7 @@ export async function runJudge(
 
   const response = await model.invoke(
     [
-      new SystemMessage(JUDGE_SYSTEM_PROMPT),
+      cachedSystemMessage(JUDGE_SYSTEM_PROMPT),
       userMessage,
     ],
     await getLangSmithInvokeConfig('asklepios-control', {

@@ -1,3 +1,5 @@
+import { SystemMessage } from '@langchain/core/messages';
+
 /**
  * Zentrale OpenRouter-Modellwahl für die IDP-Pipeline.
  *
@@ -56,4 +58,25 @@ export function getClassifierModelName(): string {
     import.meta.env.VITE_OPENROUTER_MODEL ||
     DEFAULT_CLASSIFIER_MODEL
   );
+}
+
+/**
+ * System message whose static prompt is marked as a prompt-cache
+ * breakpoint. Anthropic (via OpenRouter) caches the prefix up to the
+ * `cache_control` block; the per-document user prompt stays uncached.
+ * The static system prompt of each agent is re-sent verbatim on every
+ * run, so caching it removes that input-token cost on cache hits.
+ * Functionally identical to `new SystemMessage(text)` if a provider
+ * ignores `cache_control` (no behavioural change, no quality impact).
+ */
+export function cachedSystemMessage(text: string): SystemMessage {
+  return new SystemMessage({
+    content: [
+      {
+        type: 'text',
+        text,
+        cache_control: { type: 'ephemeral' },
+      } as unknown as { type: 'text'; text: string },
+    ],
+  });
 }

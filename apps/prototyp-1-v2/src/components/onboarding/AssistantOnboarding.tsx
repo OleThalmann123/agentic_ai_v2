@@ -28,7 +28,13 @@ const formatAIWarning = (code: string) => {
     'UNVOLLSTAENDIGE_ADRESSE': 'Adresse der Assistenzperson ist unvollständig',
     'LOHN_NICHT_ERKANNT': 'Bruttolohn konnte nicht eindeutig bestimmt werden'
   };
-  return map[code] || code.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+  if (map[code]) return map[code];
+  // Only transform all-caps enum codes (e.g. SOME_CODE); pass pre-formatted strings through unchanged
+  // to avoid mangling German umlauts with JS word-boundary title-casing.
+  if (/^[A-Z][A-Z0-9_]+$/.test(code)) {
+    return code.replace(/_/g, ' ').toLowerCase().replace(/^\w/, l => l.toUpperCase());
+  }
+  return code;
 };
 const REQUIRED_FIELDS = [
   'firstName',
@@ -603,6 +609,103 @@ function ErgaenzenSourceGuide({ fields }: { fields: PopupAttentionField[] }) {
   );
 }
 
+// ─── Review Fields List (rechte Spalte, oben) ─────────────────────────
+
+function ReviewFieldsList({
+  attentionFields,
+  extraction,
+}: {
+  attentionFields: PopupAttentionField[];
+  extraction: ContractExtractionResult | null;
+}) {
+  const getIdpField = (path: string): IDPField<unknown> | null => {
+    if (!extraction?.contracts) return null;
+    const dot = path.indexOf('.');
+    if (dot === -1) return null;
+    const section = path.slice(0, dot) as keyof ContractExtractionResult['contracts'];
+    const fieldName = path.slice(dot + 1);
+    const s = extraction.contracts[section];
+    if (!s || typeof s !== 'object') return null;
+    return (s as Record<string, IDPField<unknown>>)[fieldName] ?? null;
+  };
+
+  const scrollToField = (path: string) => {
+    const fieldKey = PATH_TO_FIELD_KEY[path];
+    if (!fieldKey) return;
+    const el = document.getElementById(`field-${fieldKey}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+
+  if (attentionFields.length === 0) {
+    return (
+      <div className="flex h-full min-h-[120px] items-center justify-center rounded-2xl border border-emerald-200 bg-emerald-50/40 p-6">
+        <div className="text-center">
+          <ShieldCheck className="w-8 h-8 text-emerald-500 mx-auto mb-2" />
+          <p className="text-sm font-semibold text-emerald-800">Alle Felder bestätigt</p>
+          <p className="text-xs text-emerald-700 mt-1">Keine Felder erfordern Prüfung.</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col rounded-2xl border border-amber-200 bg-white overflow-hidden shadow-sm">
+      <div className="shrink-0 px-4 py-2.5 border-b border-amber-200/80 flex items-center gap-2 bg-amber-50/80">
+        <AlertTriangle className="w-4 h-4 text-amber-600" />
+        <span className="text-[11px] font-semibold text-amber-900 uppercase tracking-wide">
+          Zu prüfende Felder ({attentionFields.length})
+        </span>
+      </div>
+      <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+        {attentionFields.map((field) => {
+          const idpField = getIdpField(field.path);
+          const conf = idpField?.confidence_score;
+          const sourceText = (idpField as any)?.source_text as string | undefined;
+          const value = idpField?.value;
+          const hasExtractedValue = value !== null && value !== undefined && String(value).trim() !== '';
+
+          return (
+            <button
+              key={field.path}
+              type="button"
+              onClick={() => scrollToField(field.path)}
+              className="w-full text-left px-4 py-3 hover:bg-amber-50/50 transition-colors group"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                    <span className="text-xs font-semibold text-slate-800">{field.label}</span>
+                    {field.missing ? (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200 shrink-0">Ergänzen</span>
+                    ) : (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 shrink-0">Prüfen</span>
+                    )}
+                    {conf !== undefined && (
+                      <span className="text-[9px] text-slate-400 shrink-0">{Math.round(conf * 100)}%</span>
+                    )}
+                  </div>
+                  {hasExtractedValue && (
+                    <p className="text-xs text-slate-600 truncate">
+                      Wert: <span className="font-medium">{String(value)}</span>
+                    </p>
+                  )}
+                  {sourceText && sourceText.trim() && (
+                    <p className="text-[10px] text-slate-400 mt-0.5 line-clamp-1 italic">«{sourceText}»</p>
+                  )}
+                  {field.hint && (
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-snug">{field.hint}</p>
+                  )}
+                </div>
+                <span className="text-slate-300 group-hover:text-amber-400 transition-colors shrink-0 text-xs mt-0.5">↓</span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Attention Checklist (linke Spalte oberhalb des Formulars) ────────
 
 function AttentionChecklist({
@@ -625,7 +728,7 @@ function AttentionChecklist({
             </div>
             <div className="flex-1 min-w-0">
               <h3 className="text-base sm:text-lg font-bold leading-tight">
-                {hasAnyAttention ? 'Asklepios_extract braucht deine Hilfe' : 'Daten bestätigen'}
+                {hasAnyAttention ? 'Asklepios braucht deine Hilfe' : 'Daten bestätigen'}
               </h3>
               <p className="text-xs sm:text-sm text-white/80 mt-0.5 leading-relaxed">
                 Bitte prüfe die unten markierten Felder anhand des Arbeitsvertrags rechts und ergänze fehlende Werte.
@@ -772,8 +875,9 @@ interface AssistantOnboardingProps {
   editAssistant?: any; // To avoid circular imports, just use any or import from types
 }
 
-function MiniField({ 
-  title, 
+function MiniField({
+  id,
+  title,
   children,
   aiDetected = false,
   fieldStatus,
@@ -782,9 +886,10 @@ function MiniField({
   hasValue = false,
   error,
   hint,
-  className = "" 
-}: { 
-  title: string, 
+  className = ""
+}: {
+  id?: string,
+  title: string,
   children: ReactNode,
   aiDetected?: boolean,
   fieldStatus?: 'ok' | 'review_required',
@@ -808,7 +913,7 @@ function MiniField({
   const badgeText = needsCheck ? (hasValue ? 'Prüfen' : 'Ergänzen') : (!hasValue ? 'Optional' : 'OK');
 
   return (
-    <div className={`p-2.5 rounded-xl border flex flex-col justify-between ${borderColor} transition-colors shadow-sm ${className}`}>
+    <div id={id} className={`p-2.5 rounded-xl border flex flex-col justify-between ${borderColor} transition-colors shadow-sm ${className}`}>
       <div>
         <div className="flex items-center justify-between mb-2">
           <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{title}</span>
@@ -857,6 +962,7 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
     hasWarnings: boolean;
   } | null>(null);
   const [rejectedFileName, setRejectedFileName] = useState<string>('');
+  const [pipelineDone, setPipelineDone] = useState(false);
   const [extraction, setExtraction] = useState<ContractExtractionResult | null>(null);
   const [extractionError, setExtractionError] = useState<string | null>(null);
   const [savedAssistantId, setSavedAssistantId] = useState<string | null>(null);
@@ -1243,6 +1349,7 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
     const run = (async () => {
       const runId = ++extractionRunIdRef.current;
       setStep('extracting');
+      setPipelineDone(false);
       setExtractionError(null);
       setContractPreviewFromFile(file);
 
@@ -1296,7 +1403,7 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
           setPipelineTrace(pipelineResult.trace);
         }
 
-        setStep('review');
+        setPipelineDone(true);
 
         // Default-Modus festlegen: wenn es Prüf-Felder gibt → prüfen, sonst ergänzen.
         const hasReviewRows = attention.some((f) => !f.missing && f.needsReview);
@@ -1593,11 +1700,14 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
       {step === 'extracting' && (
         <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
           <ExtractingScreen
+            pipelineDone={pipelineDone}
+            onReadyForReview={() => setStep('review')}
             onCancel={() => {
               extractionRunIdRef.current++;
               toast.dismiss(TOAST_EXTRACTION_LOADING);
               setExtractionError(null);
               setContractPreviewFromFile(null);
+              setPipelineDone(false);
               setStep('upload');
             }}
           />
@@ -1698,9 +1808,33 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
             </div>
           )}
 
-          <div className="lg:flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,640px)] gap-4">
+          <div className="lg:flex-1 lg:min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,600px)] gap-4">
+
+            {/* ── LINKE SPALTE: Ausfüllbare Felder ──────────────────── */}
             <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto lg:pr-2 space-y-3">
-              <AttentionChecklist attentionFields={popupAttentionFields}>
+
+              {/* Asklepios-Header-Kachel */}
+              <div className="rounded-2xl p-[1px] bg-[linear-gradient(90deg,rgba(59,130,246,0.55),rgba(168,85,247,0.50),rgba(16,185,129,0.38))] shadow-[0_22px_80px_rgba(2,6,23,0.18)]">
+                <div className="relative rounded-2xl overflow-hidden bg-white">
+                  <div className="relative px-5 py-4 text-white overflow-hidden">
+                    <div className="absolute inset-0 bg-[radial-gradient(1200px_600px_at_15%_0%,rgba(59,130,246,0.22),transparent_55%),radial-gradient(900px_520px_at_85%_15%,rgba(168,85,247,0.22),transparent_50%),linear-gradient(to_bottom,rgba(2,6,23,0.92),rgba(2,6,23,0.82))]" />
+                    <div className="relative flex items-start gap-4">
+                      <div className="w-10 h-10 rounded-2xl border border-white/15 bg-white/10 shrink-0 flex items-center justify-center">
+                        <AsklepiosExtractLogo className="w-5 h-5 text-white" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-sm font-bold leading-tight">
+                          {popupAttentionFields.length > 0 ? 'Asklepios braucht deine Hilfe' : 'Daten bestätigen'}
+                        </h3>
+                        <p className="text-xs text-white/80 mt-0.5 leading-relaxed">
+                          Prüfe die markierten Felder anhand des Arbeitsvertrags rechts und ergänze fehlende Werte.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             {(() => {
               const ageForLogic = (() => {
                 if (!birthDate) return null;
@@ -1722,100 +1856,84 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
               const showNbu8h = Number.isFinite(hwForLogic) && hwForLogic > 0;
               const nbu8hUnder = showNbu8h && hwForLogic < 8;
               return (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="flex items-center gap-2">
+              <>
+              {/* ── Kachel: Stammdaten ─────────────────────────────── */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 mb-1">
                   <User className="w-4 h-4 text-slate-500" />
                   <h4 className="text-sm font-bold text-slate-900">Stammdaten</h4>
                 </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <MiniField title="Vorname" {...fieldProps('firstName')} hasValue={!!firstName}>
-                    <input type="text" placeholder="Bitte ergänzen..." value={firstName} onChange={e => setFirstName(e.target.value)} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="Nachname" {...fieldProps('lastName')} hasValue={!!lastName}>
-                    <input type="text" placeholder="Bitte ergänzen..." value={lastName} onChange={e => setLastName(e.target.value)} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="Strasse" {...fieldProps('street')} hasValue={!!street}>
-                    <input
-                      type="text"
-                      placeholder="z.B. Musterstrasse 12"
-                      value={street}
-                      onChange={e => setStreet(e.target.value)}
-                      className={inputStyle}
-                    />
-                  </MiniField>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <MiniField title="PLZ" {...fieldProps('plz')} hasValue={!!plz} error={validatePlz(plz)} hint="Gültige PLZ">
-                    <input type="text" placeholder="z.B. 8000" maxLength={4} value={plz} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setPlz(v); }} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="Ort" {...fieldProps('city')} hasValue={!!city}>
-                    <input type="text" placeholder="Bitte ergänzen..." value={city} onChange={e => setCity(e.target.value)} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="Geburtsdatum" {...fieldProps('birthDate')} hasValue={!!birthDate}>
-                    <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="AHV-Nummer" {...fieldProps('ahvNumber')} hasValue={!!ahvNumber} error={validateAhvNumber(ahvNumber)} hint="Format korrekt">
-                    <input type="text" placeholder="756.xxxx.xxxx.xx" value={ahvNumber} onChange={e => setAhvNumber(formatAhvNumber(e.target.value))} className={inputStyle} />
-                  </MiniField>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <MiniField title="Geschlecht" {...fieldProps('gender')} hasValue={!!gender}>
-                    <select value={gender} onChange={e => setGender(e.target.value)} className={selectStyle}>
-                      <option value="">Bitte wählen...</option>
-                      <option value="male">Männlich</option>
-                      <option value="female">Weiblich</option>
-                      <option value="diverse">Divers</option>
-                    </select>
-                  </MiniField>
-                  <MiniField title="Telefon (optional)" {...fieldProps('phone')} hasValue={!!phone}>
-                    <input type="text" placeholder="+41 ..." value={phone} onChange={e => setPhone(e.target.value)} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="E-Mail" {...fieldProps('email')} hasValue={!!email}>
-                    <input type="email" placeholder="name@domain.ch" value={email} onChange={e => setEmail(e.target.value)} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="Nationalität" {...fieldProps('country')} hasValue={!!country}>
-                    <select
-                      value={country && COUNTRY_OPTIONS.some(o => o.value === country) ? country : 'OTHER'}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        setCountry(v === 'OTHER' ? '' : v);
-                      }}
-                      className={selectStyle}
-                    >
-                      {COUNTRY_OPTIONS.map(o => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
-                  </MiniField>
-                </div>
-
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <MiniField title="Zivilstand" {...fieldProps('civilStatus')} hasValue={!!civilStatus}>
-                    <select value={civilStatus} onChange={e => setCivilStatus(e.target.value)} className={selectStyle}>
-                      <option value="">Bitte wählen...</option>
-                      <option value="ledig">Ledig</option>
-                      <option value="verheiratet">Verheiratet</option>
-                      <option value="geschieden">Geschieden</option>
-                      <option value="verwitwet">Verwitwet</option>
-                      <option value="eingetragene Partnerschaft">Eingetragene Partnerschaft</option>
-                    </select>
-                  </MiniField>
-                  <MiniField title="Aufenthaltsstatus" {...fieldProps('residencePermit')} hasValue={!!residencePermit}>
-                    <select value={residencePermit} onChange={e => setResidencePermit(e.target.value)} className={selectStyle}>
-                      <option value="">Bitte wählen...</option>
-                      <option value="CH">Schweizer/in</option>
-                      <option value="C">Ausweis C (Niederlassung)</option>
-                      <option value="B">Ausweis B (Aufenthalt)</option>
-                      <option value="G">Ausweis G (Grenzgänger)</option>
-                      <option value="L">Ausweis L (Kurzaufenthalt)</option>
-                      <option value="N">Ausweis N (Asylsuchende)</option>
-                      <option value="F">Ausweis F (vorläufig Aufgenommene)</option>
-                    </select>
-                  </MiniField>
-                </div>
+                <MiniField id="field-firstName" title="Vorname" {...fieldProps('firstName')} hasValue={!!firstName}>
+                  <input type="text" placeholder="Bitte ergänzen..." value={firstName} onChange={e => setFirstName(e.target.value)} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-lastName" title="Nachname" {...fieldProps('lastName')} hasValue={!!lastName}>
+                  <input type="text" placeholder="Bitte ergänzen..." value={lastName} onChange={e => setLastName(e.target.value)} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-street" title="Strasse" {...fieldProps('street')} hasValue={!!street}>
+                  <input type="text" placeholder="z.B. Musterstrasse 12" value={street} onChange={e => setStreet(e.target.value)} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-plz" title="PLZ" {...fieldProps('plz')} hasValue={!!plz} error={validatePlz(plz)} hint="Gültige PLZ">
+                  <input type="text" placeholder="z.B. 8000" maxLength={4} value={plz} onChange={e => { const v = e.target.value.replace(/\D/g, '').slice(0, 4); setPlz(v); }} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-city" title="Ort" {...fieldProps('city')} hasValue={!!city}>
+                  <input type="text" placeholder="Bitte ergänzen..." value={city} onChange={e => setCity(e.target.value)} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-birthDate" title="Geburtsdatum" {...fieldProps('birthDate')} hasValue={!!birthDate}>
+                  <input type="date" value={birthDate} onChange={e => setBirthDate(e.target.value)} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-ahvNumber" title="AHV-Nummer" {...fieldProps('ahvNumber')} hasValue={!!ahvNumber} error={validateAhvNumber(ahvNumber)} hint="Format korrekt">
+                  <input type="text" placeholder="756.xxxx.xxxx.xx" value={ahvNumber} onChange={e => setAhvNumber(formatAhvNumber(e.target.value))} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-gender" title="Geschlecht" {...fieldProps('gender')} hasValue={!!gender}>
+                  <select value={gender} onChange={e => setGender(e.target.value)} className={selectStyle}>
+                    <option value="">Bitte wählen...</option>
+                    <option value="male">Männlich</option>
+                    <option value="female">Weiblich</option>
+                    <option value="diverse">Divers</option>
+                  </select>
+                </MiniField>
+                <MiniField id="field-phone" title="Telefon (optional)" {...fieldProps('phone')} hasValue={!!phone}>
+                  <input type="text" placeholder="+41 ..." value={phone} onChange={e => setPhone(e.target.value)} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-email" title="E-Mail" {...fieldProps('email')} hasValue={!!email}>
+                  <input type="email" placeholder="name@domain.ch" value={email} onChange={e => setEmail(e.target.value)} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-country" title="Nationalität" {...fieldProps('country')} hasValue={!!country}>
+                  <select
+                    value={country && COUNTRY_OPTIONS.some(o => o.value === country) ? country : 'OTHER'}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setCountry(v === 'OTHER' ? '' : v);
+                    }}
+                    className={selectStyle}
+                  >
+                    {COUNTRY_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </MiniField>
+                <MiniField id="field-civilStatus" title="Zivilstand" {...fieldProps('civilStatus')} hasValue={!!civilStatus}>
+                  <select value={civilStatus} onChange={e => setCivilStatus(e.target.value)} className={selectStyle}>
+                    <option value="">Bitte wählen...</option>
+                    <option value="ledig">Ledig</option>
+                    <option value="verheiratet">Verheiratet</option>
+                    <option value="geschieden">Geschieden</option>
+                    <option value="verwitwet">Verwitwet</option>
+                    <option value="eingetragene Partnerschaft">Eingetragene Partnerschaft</option>
+                  </select>
+                </MiniField>
+                <MiniField id="field-residencePermit" title="Aufenthaltsstatus" {...fieldProps('residencePermit')} hasValue={!!residencePermit}>
+                  <select value={residencePermit} onChange={e => setResidencePermit(e.target.value)} className={selectStyle}>
+                    <option value="">Bitte wählen...</option>
+                    <option value="CH">Schweizer/in</option>
+                    <option value="C">Ausweis C (Niederlassung)</option>
+                    <option value="B">Ausweis B (Aufenthalt)</option>
+                    <option value="G">Ausweis G (Grenzgänger)</option>
+                    <option value="L">Ausweis L (Kurzaufenthalt)</option>
+                    <option value="N">Ausweis N (Asylsuchende)</option>
+                    <option value="F">Ausweis F (vorläufig Aufgenommene)</option>
+                  </select>
+                </MiniField>
 
                 {showAgeWarning && (
                   <div className="bg-red-50 rounded-xl border border-red-200 p-3 text-sm text-red-800 flex items-start gap-2">
@@ -1830,226 +1948,222 @@ export function AssistantOnboarding({ onComplete, onClose, initialUploadFile, ed
                   </div>
                 )}
 
-                {/* Dezente Trennlinie zwischen Stammdaten und Vertragsdaten */}
-                <div className="pt-4 mt-2 border-t border-slate-200" />
+              </div>
 
-                <div className="flex items-center gap-2">
+              {/* ── Kachel: Vertragsdetails & Pensum ──────────────────── */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
+                <div className="flex items-center gap-2 mb-1">
                   <FileText className="w-4 h-4 text-slate-500" />
                   <h4 className="text-sm font-bold text-slate-900">Vertragsdetails & Pensum</h4>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <MiniField title="Vertragsbeginn" {...fieldProps('contractStart')} hasValue={!!contractStart}>
-                    <input type="date" value={contractStart} onChange={e => setContractStart(e.target.value)} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="Unbefristet" {...fieldProps('contractUnbefristet')} hasValue={contractUnbefristet}>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        className="w-5 h-5 rounded border-slate-300"
-                        checked={contractUnbefristet}
-                        onChange={(e) => {
-                          const v = e.target.checked;
-                          setContractUnbefristet(v);
-                          if (v) setContractEnd('');
-                        }}
-                      />
-                      <span>Kein fixes Vertragsende</span>
-                    </label>
-                  </MiniField>
-                  <MiniField title="Vertragsende" {...fieldProps('contractEnd')} hasValue={contractUnbefristet || !!contractEnd}>
-                    {contractUnbefristet ? (
-                      <p className="text-xs text-slate-500 py-1.5">— nicht zutreffend —</p>
-                    ) : (
-                      <input type="date" value={contractEnd} onChange={e => setContractEnd(e.target.value)} className={inputStyle} />
-                    )}
-                  </MiniField>
-                  <MiniField title="Kündigungsfrist (Tage)" {...fieldProps('noticePeriodDays')} hasValue={!!noticePeriodDays}>
+                <MiniField id="field-contractStart" title="Vertragsbeginn" {...fieldProps('contractStart')} hasValue={!!contractStart}>
+                  <input type="date" value={contractStart} onChange={e => setContractStart(e.target.value)} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-contractUnbefristet" title="Unbefristet" {...fieldProps('contractUnbefristet')} hasValue={contractUnbefristet}>
+                  <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
                     <input
-                      type="number"
-                      min={0}
-                      placeholder="z. B. 30"
-                      value={noticePeriodDays}
-                      onChange={e => setNoticePeriodDays(e.target.value)}
-                      className={inputStyle}
+                      type="checkbox"
+                      className="w-5 h-5 rounded border-slate-300"
+                      checked={contractUnbefristet}
+                      onChange={(e) => {
+                        const v = e.target.checked;
+                        setContractUnbefristet(v);
+                        if (v) setContractEnd('');
+                      }}
                     />
-                  </MiniField>
-                  <MiniField title="Stunden/Woche" {...fieldProps('hoursPerWeek')} hasValue={!!hoursPerWeek} error={validatePositiveNumber(hoursPerWeek, 'Stunden')}>
-                    <input type="number" min="0" max="168" step="0.5" placeholder="z.B. 20" value={hoursPerWeek} onChange={e => setHoursPerWeek(e.target.value)} className={inputStyle} />
-                  </MiniField>
-                </div>
+                    <span>Kein fixes Vertragsende</span>
+                  </label>
+                </MiniField>
+                <MiniField id="field-contractEnd" title="Vertragsende" {...fieldProps('contractEnd')} hasValue={contractUnbefristet || !!contractEnd}>
+                  {contractUnbefristet ? (
+                    <p className="text-xs text-slate-500 py-1.5">— nicht zutreffend —</p>
+                  ) : (
+                    <input type="date" value={contractEnd} onChange={e => setContractEnd(e.target.value)} className={inputStyle} />
+                  )}
+                </MiniField>
+                <MiniField id="field-noticePeriodDays" title="Kündigungsfrist (Tage)" {...fieldProps('noticePeriodDays')} hasValue={!!noticePeriodDays}>
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="z. B. 30"
+                    value={noticePeriodDays}
+                    onChange={e => setNoticePeriodDays(e.target.value)}
+                    className={inputStyle}
+                  />
+                </MiniField>
+                <MiniField id="field-hoursPerWeek" title="Stunden/Woche" {...fieldProps('hoursPerWeek')} hasValue={!!hoursPerWeek} error={validatePositiveNumber(hoursPerWeek, 'Stunden')}>
+                  <input type="number" min="0" max="168" step="0.5" placeholder="z.B. 20" value={hoursPerWeek} onChange={e => setHoursPerWeek(e.target.value)} className={inputStyle} />
+                </MiniField>
+              </div>
 
-                <h4 className="text-sm font-bold text-slate-900">Lohn</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <MiniField title="Lohnart" {...fieldProps('wageType')} hasValue={!!wageType}>
-                    <select value={wageType} onChange={e => setWageType(e.target.value)} className={selectStyle}>
-                      <option value="hourly">Stundenlohn</option>
-                    </select>
-                  </MiniField>
-                  <MiniField title="Stundenlohn (CHF)" {...fieldProps('hourlyRate')} hasValue={!!hourlyRate} error={validatePositiveNumber(hourlyRate, 'Stundenlohn')}>
-                    <input type="number" step="0.05" min="0" placeholder="z.B. 30.00" value={hourlyRate} onChange={e => setHourlyRate(e.target.value)} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="Ferien (Wochen)" {...fieldProps('vacationWeeks')} hasValue={!!vacationWeeks}>
-                    <select value={vacationWeeks} onChange={e => setVacationWeeks(e.target.value)} className={selectStyle}>
-                      <option value="4">4</option>
-                      <option value="5">5</option>
-                      <option value="6">6</option>
-                      <option value="7">7</option>
-                    </select>
-                  </MiniField>
-                </div>
-
+              {/* ── Kachel: Lohn ──────────────────────────────────────── */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
+                <h4 className="text-sm font-bold text-slate-900 mb-1">Lohn</h4>
+                <MiniField id="field-wageType" title="Lohnart" {...fieldProps('wageType')} hasValue={!!wageType}>
+                  <select value={wageType} onChange={e => setWageType(e.target.value)} className={selectStyle}>
+                    <option value="hourly">Stundenlohn</option>
+                  </select>
+                </MiniField>
+                <MiniField id="field-hourlyRate" title="Stundenlohn (CHF)" {...fieldProps('hourlyRate')} hasValue={!!hourlyRate} error={validatePositiveNumber(hourlyRate, 'Stundenlohn')}>
+                  <input type="number" step="0.05" min="0" placeholder="z.B. 30.00" value={hourlyRate} onChange={e => setHourlyRate(e.target.value)} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-vacationWeeks" title="Ferien (Wochen)" {...fieldProps('vacationWeeks')} hasValue={!!vacationWeeks}>
+                  <select value={vacationWeeks} onChange={e => setVacationWeeks(e.target.value)} className={selectStyle}>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                  </select>
+                </MiniField>
                 {showBvgWarning && (
                   <div className="bg-amber-50 rounded-xl border border-amber-200 p-3 text-sm text-amber-800">
-                    Monatliches Einkommen ca. CHF {monthlyForLogic!.toFixed(0)} – liegt über CHF 1'890 (BVG-Schwelle von CHF 22'680/Jahr).
+                    Monatliches Einkommen ca. CHF {monthlyForLogic!.toFixed(0)} – liegt über CHF 1’890 (BVG-Schwelle von CHF 22’680/Jahr).
                     <span className="inline-flex items-center ml-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase bg-gray-200 text-gray-500">BVG Out of Scope</span>
                   </div>
                 )}
+              </div>
 
-                <div className="mt-2">
-                  <div className="flex items-baseline justify-between gap-3 mb-2">
-                    <h4 className="text-sm font-bold text-slate-900">Versicherung & Konto</h4>
-                    <div className="flex gap-1.5">
-                      {['BVG', 'Quellensteuer', 'Nachtdienst'].map(label => (
-                        <span key={label} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-400 border border-gray-200/60">
-                          {label} – n/a
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <MiniField title="Ferienzuschlag %" {...fieldProps('vacationSurcharge')} hasValue={!!vacationSurcharge}>
-                    <input
-                      type="number"
-                      min={0}
-                      step="0.01"
-                      placeholder="z.B. 8.33"
-                      value={vacationSurcharge}
-                      onChange={e => setVacationSurcharge(e.target.value)}
-                      className={inputStyle}
-                    />
-                  </MiniField>
-                  <MiniField title="Lohnkonto (IBAN)" {...fieldProps('iban')} hasValue={!!iban} error={validateIban(iban)} hint="Gültige IBAN">
-                    <input type="text" placeholder="CH93 0076 2011 6238 5295 7" value={iban} onChange={e => setIban(formatIban(e.target.value))} className={inputStyle} />
-                  </MiniField>
-                  <MiniField title="Abrechnungsverfahren" {...fieldProps('billingMethod')} hasValue={!!billingMethod}>
-                    <select value={billingMethod} onChange={e => setBillingMethod(e.target.value)} className={selectStyle}>
-                      <option value="">Bitte wählen…</option>
-                      <option value="ordinary">Ordentlich</option>
-                    </select>
-                  </MiniField>
-                  <MiniField
-                    title="Wohnsitzkanton"
-                    {...fieldProps('canton')}
-                    hasValue={!!canton}
-                    hint="Wohnsitzkanton der Assistenzperson (aus PLZ/Adresse abgeleitet) – bitte prüfen"
-                  >
-                    <select value={canton} onChange={e => setCanton(e.target.value)} className={selectStyle}>
-                      <option value="">Bitte wählen...</option>
-                      {SWISS_CANTON_OPTIONS.map(([code, name]) => (
-                        <option key={code} value={code}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
-                  </MiniField>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-200 space-y-3">
-                    <h5 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                      Nichtberufsunfallversicherung (NBU)
-                    </h5>
-                    <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-                      <HelpCircle className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" />
-                      <span>Der <strong>Nichtberufsunfallversicherungs-Gesamtprämiensatz (NBU)</strong> muss zwingend manuell eingegeben werden – entnehmen Sie ihn Ihrer Versicherungspolice (typischerweise 0.5–3&nbsp;%). Die Aufteilung in AG-/AN-Anteil kann aus dem Arbeitsvertrag übernommen werden.</span>
-                    </div>
-                    {showNbu8h && nbu8hUnder && (
-                      <div className="bg-blue-50 rounded-xl border border-blue-100 p-3 text-sm text-blue-700">
-                        Pensum unter 8h/Woche – Nichtberufsunfallversicherung ist nicht obligatorisch. Die NBU-Felder sind optional und können leer bleiben.
-                      </div>
-                    )}
-                    {showNbu8h && !nbu8hUnder && (
-                      <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-3 text-sm text-emerald-700">
-                        Pensum ≥ 8h/Woche – Nichtberufsunfallversicherung pflichtig. Der Abzug wird auf der Lohnabrechnung ausgewiesen.
-                      </div>
-                    )}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                      <MiniField title="Nichtberufsunfallvers. (NBU) Gesamtprämiensatz (%) – manuell" {...fieldProps('nbuTotal')} hasValue={!!nbuTotal}
-                        hint="Gesamtprämiensatz gemäss Ihrer Versicherungspolice (typ. 0.5–3%)"
-                        error={nbuTotal && parseFloat(nbuTotal) > 5 ? 'Unrealistisch hoch – Prämiensätze liegen typischerweise bei 0.5–3%' : undefined}>
-                        <input type="number" min={0} max={10} step="0.01" placeholder="z.B. 1.50"
-                          value={nbuTotal} onChange={e => setNbuTotal(e.target.value)} className={inputStyle} />
-                      </MiniField>
-                      <MiniField title="Nichtberufsunfallvers. (NBU) AG-Prämienanteil (%)" {...fieldProps('nbuEmployer')} hasValue={!!nbuEmployer}
-                        error={nbuEmployer && nbuEmployee && Math.abs(parseFloat(nbuEmployer || '0') + parseFloat(nbuEmployee || '0') - 100) > 0.1 ? 'AG-Anteil + AN-Anteil muss 100% ergeben' : undefined}>
-                        <input type="number" min={0} max={100} step="1" placeholder="z.B. 0"
-                          value={nbuEmployer} onChange={e => setNbuEmployer(e.target.value)}
-                          className={inputStyle} />
-                      </MiniField>
-                      <MiniField title="Nichtberufsunfallvers. (NBU) AN-Prämienanteil (%)" {...fieldProps('nbuEmployee')} hasValue={!!nbuEmployee}
-                        error={nbuEmployer && nbuEmployee && Math.abs(parseFloat(nbuEmployer || '0') + parseFloat(nbuEmployee || '0') - 100) > 0.1 ? 'AG-Anteil + AN-Anteil muss 100% ergeben' : undefined}>
-                        <input type="number" min={0} max={100} step="1" placeholder="z.B. 100"
-                          value={nbuEmployee} onChange={e => setNbuEmployee(e.target.value)}
-                          className={inputStyle} />
-                      </MiniField>
-                    </div>
-                    <MiniField title="AG übernimmt Nichtberufsunfallvers. (NBU) freiwillig" {...fieldProps('nbuEmployerVoluntary')} hasValue>
-                      <label className="flex items-center gap-2 cursor-pointer mt-1">
-                        <input type="checkbox" checked={nbuEmployerVoluntary}
-                          onChange={e => setNbuEmployerVoluntary(e.target.checked)}
-                          className="rounded border-gray-300 h-4 w-4" />
-                        <span className="text-sm text-muted-foreground">Auch bei Pensum unter 8h/Woche</span>
-                      </label>
-                    </MiniField>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-slate-200 space-y-3">
-                    <h5 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
-                      Krankentaggeldversicherung (KTV)
-                    </h5>
-                    <p className="text-xs text-slate-500">Optional – nur ausfüllen wenn eine KTV besteht. Die Sätze finden sich in der Versicherungspolice oder im Arbeitsvertrag (in %).</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      <MiniField title="KTV AG-Prämienanteil (%)" hasValue={!!ktvAg}
-                        hint="Arbeitgeber-Anteil an der KTV-Prämie in Prozent (z.B. 0.50 für 0.5%)">
-                        <input type="number" min={0} max={10} step="0.01" placeholder="z.B. 0.50"
-                          value={ktvAg} onChange={e => setKtvAg(e.target.value)} className={inputStyle} />
-                      </MiniField>
-                      <MiniField title="KTV AN-Prämienanteil (%)" hasValue={!!ktvEmployee}
-                        hint="Arbeitnehmer-Anteil an der KTV-Prämie in Prozent (z.B. 0.50 für 0.5%)">
-                        <input type="number" min={0} max={10} step="0.01" placeholder="z.B. 0.50"
-                          value={ktvEmployee} onChange={e => setKtvEmployee(e.target.value)} className={inputStyle} />
-                      </MiniField>
-                    </div>
+              {/* ── Kachel: Versicherung & Konto ─────────────────────── */}
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
+                <div className="flex items-baseline justify-between gap-3 mb-1">
+                  <h4 className="text-sm font-bold text-slate-900">Versicherung & Konto</h4>
+                  <div className="flex gap-1.5">
+                    {['BVG', 'Quellensteuer', 'Nachtdienst'].map(label => (
+                      <span key={label} className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-gray-100 text-gray-400 border border-gray-200/60">
+                        {label} – n/a
+                      </span>
+                    ))}
                   </div>
                 </div>
+                <MiniField id="field-vacationSurcharge" title="Ferienzuschlag %" {...fieldProps('vacationSurcharge')} hasValue={!!vacationSurcharge}>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="z.B. 8.33"
+                    value={vacationSurcharge}
+                    onChange={e => setVacationSurcharge(e.target.value)}
+                    className={inputStyle}
+                  />
+                </MiniField>
+                <MiniField id="field-iban" title="Lohnkonto (IBAN)" {...fieldProps('iban')} hasValue={!!iban} error={validateIban(iban)} hint="Gültige IBAN">
+                  <input type="text" placeholder="CH93 0076 2011 6238 5295 7" value={iban} onChange={e => setIban(formatIban(e.target.value))} className={inputStyle} />
+                </MiniField>
+                <MiniField id="field-billingMethod" title="Abrechnungsverfahren" {...fieldProps('billingMethod')} hasValue={!!billingMethod}>
+                  <select value={billingMethod} onChange={e => setBillingMethod(e.target.value)} className={selectStyle}>
+                    <option value="">Bitte wählen…</option>
+                    <option value="ordinary">Ordentlich</option>
+                  </select>
+                </MiniField>
+                <MiniField
+                  id="field-canton"
+                  title="Wohnsitzkanton"
+                  {...fieldProps('canton')}
+                  hasValue={!!canton}
+                  hint="Wohnsitzkanton der Assistenzperson (aus PLZ/Adresse abgeleitet) – bitte prüfen"
+                >
+                  <select value={canton} onChange={e => setCanton(e.target.value)} className={selectStyle}>
+                    <option value="">Bitte wählen...</option>
+                    {SWISS_CANTON_OPTIONS.map(([code, name]) => (
+                      <option key={code} value={code}>
+                        {name}
+                      </option>
+                    ))}
+                  </select>
+                </MiniField>
+
+                <div className="mt-4 pt-3 border-t border-slate-200 space-y-3">
+                  <h5 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    Nichtberufsunfallversicherung (NBU)
+                  </h5>
+                  <div className="flex items-start gap-2.5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                    <HelpCircle className="w-4 h-4 mt-0.5 shrink-0 text-blue-500" />
+                    <span>Der <strong>Nichtberufsunfallversicherungs-Gesamtprämiensatz (NBU)</strong> muss zwingend manuell eingegeben werden – entnehmen Sie ihn Ihrer Versicherungspolice (typischerweise 0.5–3&nbsp;%). Die Aufteilung in AG-/AN-Anteil kann aus dem Arbeitsvertrag übernommen werden.</span>
+                  </div>
+                  {showNbu8h && nbu8hUnder && (
+                    <div className="bg-blue-50 rounded-xl border border-blue-100 p-3 text-sm text-blue-700">
+                      Pensum unter 8h/Woche – Nichtberufsunfallversicherung ist nicht obligatorisch. Die NBU-Felder sind optional und können leer bleiben.
+                    </div>
+                  )}
+                  {showNbu8h && !nbu8hUnder && (
+                    <div className="bg-emerald-50 rounded-xl border border-emerald-200 p-3 text-sm text-emerald-700">
+                      Pensum ≥ 8h/Woche – Nichtberufsunfallversicherung pflichtig. Der Abzug wird auf der Lohnabrechnung ausgewiesen.
+                    </div>
+                  )}
+                  <MiniField id="field-nbuTotal" title="Nichtberufsunfallvers. (NBU) Gesamtprämiensatz (%) – manuell" {...fieldProps('nbuTotal')} hasValue={!!nbuTotal}
+                    hint="Gesamtprämiensatz gemäss Ihrer Versicherungspolice (typ. 0.5–3%)"
+                    error={nbuTotal && parseFloat(nbuTotal) > 5 ? 'Unrealistisch hoch – Prämiensätze liegen typischerweise bei 0.5–3%' : undefined}>
+                    <input type="number" min={0} max={10} step="0.01" placeholder="z.B. 1.50"
+                      value={nbuTotal} onChange={e => setNbuTotal(e.target.value)} className={inputStyle} />
+                  </MiniField>
+                  <MiniField id="field-nbuEmployer" title="Nichtberufsunfallvers. (NBU) AG-Prämienanteil (%)" {...fieldProps('nbuEmployer')} hasValue={!!nbuEmployer}
+                    error={nbuEmployer && nbuEmployee && Math.abs(parseFloat(nbuEmployer || '0') + parseFloat(nbuEmployee || '0') - 100) > 0.1 ? 'AG-Anteil + AN-Anteil muss 100% ergeben' : undefined}>
+                    <input type="number" min={0} max={100} step="1" placeholder="z.B. 0"
+                      value={nbuEmployer} onChange={e => setNbuEmployer(e.target.value)}
+                      className={inputStyle} />
+                  </MiniField>
+                  <MiniField id="field-nbuEmployee" title="Nichtberufsunfallvers. (NBU) AN-Prämienanteil (%)" {...fieldProps('nbuEmployee')} hasValue={!!nbuEmployee}
+                    error={nbuEmployer && nbuEmployee && Math.abs(parseFloat(nbuEmployer || '0') + parseFloat(nbuEmployee || '0') - 100) > 0.1 ? 'AG-Anteil + AN-Anteil muss 100% ergeben' : undefined}>
+                    <input type="number" min={0} max={100} step="1" placeholder="z.B. 100"
+                      value={nbuEmployee} onChange={e => setNbuEmployee(e.target.value)}
+                      className={inputStyle} />
+                  </MiniField>
+                  <MiniField id="field-nbuEmployerVoluntary" title="AG übernimmt Nichtberufsunfallvers. (NBU) freiwillig" {...fieldProps('nbuEmployerVoluntary')} hasValue>
+                    <label className="flex items-center gap-2 cursor-pointer mt-1">
+                      <input type="checkbox" checked={nbuEmployerVoluntary}
+                        onChange={e => setNbuEmployerVoluntary(e.target.checked)}
+                        className="rounded border-gray-300 h-4 w-4" />
+                      <span className="text-sm text-muted-foreground">Auch bei Pensum unter 8h/Woche</span>
+                    </label>
+                  </MiniField>
+                </div>
+
+                <div className="mt-4 pt-3 border-t border-slate-200 space-y-3">
+                  <h5 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">
+                    Krankentaggeldversicherung (KTV)
+                  </h5>
+                  <p className="text-xs text-slate-500">Optional – nur ausfüllen wenn eine KTV besteht. Die Sätze finden sich in der Versicherungspolice oder im Arbeitsvertrag (in %).</p>
+                  <MiniField id="field-ktvAg" title="KTV AG-Prämienanteil (%)" hasValue={!!ktvAg}
+                    hint="Arbeitgeber-Anteil an der KTV-Prämie in Prozent (z.B. 0.50 für 0.5%)">
+                    <input type="number" min={0} max={10} step="0.01" placeholder="z.B. 0.50"
+                      value={ktvAg} onChange={e => setKtvAg(e.target.value)} className={inputStyle} />
+                  </MiniField>
+                  <MiniField id="field-ktvEmployee" title="KTV AN-Prämienanteil (%)" hasValue={!!ktvEmployee}
+                    hint="Arbeitnehmer-Anteil an der KTV-Prämie in Prozent (z.B. 0.50 für 0.5%)">
+                    <input type="number" min={0} max={10} step="0.01" placeholder="z.B. 0.50"
+                      value={ktvEmployee} onChange={e => setKtvEmployee(e.target.value)} className={inputStyle} />
+                  </MiniField>
+                </div>
               </div>
+              </>
               );
             })()}
 
-            {/* Footer innerhalb der weißen Karte */}
-            <div className="pt-4 mt-4 border-t border-slate-200 flex items-center justify-end">
-              <button
-                type="button"
-                onClick={doSave}
-                disabled={saving || !firstName || !lastName}
+            {/* Speichern */}
+            <div className="flex items-center justify-end pb-2">
+              <button type="button" onClick={doSave} disabled={saving || !firstName || !lastName}
                 className="px-6 py-2.5 rounded-full bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 disabled:opacity-50 transition-colors flex items-center gap-2">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 className="w-4 h-4" /> Speichern & Beenden</>}
               </button>
             </div>
-              </AttentionChecklist>
-            </div>
+            </div>  {/* closes left column div */}
 
-            <aside className="lg:min-h-0 lg:h-full flex flex-col gap-3 lg:overflow-hidden">
-              <div className="min-h-[420px] lg:min-h-0 lg:flex-[3]">
+            <aside className="min-w-0 lg:min-h-0 lg:h-full flex flex-col gap-3 lg:overflow-hidden">
+              {/* Top: Zu prüfende Felder */}
+              <div className="min-h-[220px] lg:min-h-0 lg:flex-[2]">
+                <ReviewFieldsList
+                  attentionFields={popupAttentionFields}
+                  extraction={extraction}
+                />
+              </div>
+              {/* Bottom: Vertragsvorschau */}
+              <div className="min-h-[360px] lg:min-h-0 lg:flex-[3]">
                 <ContractPreview
                   contractPreviewUrl={contractPreviewUrl}
                   contractFileName={contractFileName}
                   contractMimeType={contractMimeType}
                   docxHtml={docxHtml}
                 />
-              </div>
-              <div className="min-h-[260px] lg:min-h-0 lg:flex-[2]">
-                <ErgaenzenSourceGuide fields={popupAttentionFields} />
               </div>
             </aside>
           </div>

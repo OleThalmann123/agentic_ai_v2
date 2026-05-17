@@ -197,9 +197,6 @@ export function EmployerOnboarding({ onComplete }: Props) {
     // if we rely on the chained select to get the ID back.
     const employerId = crypto.randomUUID();
 
-    console.log('[onboarding] auth user:', { id: user.id, email: user.email });
-    console.log('[onboarding] employer insert payload:', { id: employerId, name, canton: detectedCanton?.code || 'ZH' });
-
     const { error: e1 } = await supabase
       .from('employer')
       .insert({
@@ -251,7 +248,6 @@ export function EmployerOnboarding({ onComplete }: Props) {
 
     if (e1) { toast.error('Fehler: ' + e1.message); setLoading(false); return; }
 
-    console.log('[onboarding] employer_access insert payload:', { employer_id: employerId, user_id: user.id });
     const { error: e2 } = await supabase
       .from('employer_access')
       .insert({ employer_id: employerId, user_id: user.id, role: 'admin_full', invited_email: user.email || '' });

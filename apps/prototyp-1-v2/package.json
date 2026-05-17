@@ -5,20 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "tsc": "npx tsc --noEmit",
     "build": "npx tsc -b --force && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
   },
   "dependencies": {
     "@asklepios/core": "*",
-    "@langchain/core": "^1.1.38",
-    "@langchain/openai": "^1.4.1",
     "@supabase/supabase-js": "^2.49.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "date-fns": "^3.6.0",
-    "date-fns-tz": "^3.2.0",
-    "docx": "^9.6.1",
     "jspdf": "^2.5.2",
     "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.469.0",
@@ -28,7 +24,6 @@
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.28.0",
-    "recharts": "^2.15.0",
     "sonner": "^1.7.1",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7"
