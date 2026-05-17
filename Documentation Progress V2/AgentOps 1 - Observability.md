@@ -91,8 +91,7 @@ framework defines as mandatory, inspectable at the corresponding span:
 - **LLM identity**: the model per call is captured in run metadata as
   `ls_model_name` (for example `anthropic/claude-sonnet-4.6`,
   `anthropic/claude-haiku-4.5`), which permits a per-model breakdown
-  of cost and latency. This breakdown is the precondition for the
-  optimization levers documented in Pillar 3.
+  of cost and latency. 
 - **Tool calls**: tool name, arguments, return value and validation
   outcome (status `success` / `warning` / `error` from the Zod-based
   validator).
