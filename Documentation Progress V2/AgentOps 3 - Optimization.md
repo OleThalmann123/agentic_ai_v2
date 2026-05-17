@@ -10,7 +10,7 @@ the Optimization Loop of Slides 66 and 67) onto the implemented state
 of the Asklepios document pipeline. The pillar comprises two framework
 cells: Insights and Optimization.
 
-A precise scoping statement is required to avoid overstatement. The
+A scoping statement is required to avoid overstatement. The
 framework's Optimization pillar is a closed continuous-improvement
 loop: a signal observed in production is evaluated, an intervention is
 applied, and the result is fed back as a new baseline. That loop is
