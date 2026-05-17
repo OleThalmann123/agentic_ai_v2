@@ -9,9 +9,7 @@ AgentOps framework (*LU09 - Managing Risk of AI Agents*, Slide 41) onto
 the implemented state of the Asklepios document pipeline. The pillar
 comprises three framework cells: Trace Capture and Visualization, Trace
 Level Metrics, and Issue Detection. The instrumentation backend is
-LangSmith, chosen because the pipeline is built on `@langchain/core`
-and `@langchain/openai`; LangChain emits trace events through its
-callback system, and LangSmith (maintained by LangChain Inc.) consumes
+LangSmith, chosen because the pipeline is built on Langsmith. This approach consumes
 that protocol directly, which removes the need for a second,
 parallel instrumentation layer.
 
@@ -32,7 +30,7 @@ parallel instrumentation layer.
 | Issue Detection | Root Cause Analysis | manual | 1.3.3 |
 
 Automated Root Cause Analysis is the only Observability sub-item not
-realised as code; its rationale and deferral are stated in section 4.
+realised as code. Its rationale and deferral are stated in section 4.
 
 ## 1.1 Trace Capture and Visualization
 
