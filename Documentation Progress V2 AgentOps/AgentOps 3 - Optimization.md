@@ -1,6 +1,6 @@
 # AgentOps 3 - Optimization
 
-*Status: 15.05.2026*
+*Status: 17.05.2026*
 
 ## Purpose
 
@@ -26,76 +26,46 @@ such.
 
 | Cell | Sub-item | Status | Section |
 |---|---|---|---|
-| Insights | Find top-K issues for a specific agent | manual | 1.1 |
+| Insights | Find top-K issues for a specific agent | via prompt | 1.1 |
 | Insights | Find top-K issues across all agents | out-of-scope | 4 |
-| Insights | Find Root Cause for an identified issue | manual | 1.1 |
+| Insights | Find Root Cause for an identified issue | via prompt | 1.1 |
 | Insights | UI and API | out-of-scope | 4 |
-| Optimization | Performance Tuning | implemented (design-time) | 2.1 |
-| Optimization | Agent flow / accuracy optimization | implemented (design-time) | 2.2 |
+| Optimization | Applied levers (cost / latency) | implemented | 2 |
 | Optimization | Prompt and Context Tuning | out-of-scope | 4 |
 | Optimization | Retrieval and Tooling Optimization | out-of-scope | 4 |
 | Optimization | Continuous Improvement Loop | out-of-scope | 4 |
 
 ## 1. Insights
 
-### 1.1 Issue insight and root cause (manual)
+### 1.1 Issue insight and root cause (via prompt)
 
-Issue ranking and root-cause identification are operated manually
-through the LangSmith UI and the Claude Code / `langsmith` CLI
-connection documented in Pillar 1, section 1.3.3. Concretely: the
-issue tags `tool_schema_fail` and `tool_loop_capped` (Pillar 1,
-section 1.3) partition failing runs into known classes, and the
-per-step cost, latency and token breakdown (Pillar 1, section 1.2)
-identifies the dominant contributor within a run. This yields the same
-result as a "top-K issues for this agent" view and a "find root cause"
-action, performed on demand rather than through a dedicated insights
-service. A worked example is the 2026-05-13 "Double Call" finding
-recorded in Pillar 1, section 1.3.3.
+Issue ranking and root-cause identification are not run through a
+dedicated insights service. They are operated via prompt through
+Claude Code, connected to LangSmith by the locally installed
+`langsmith` CLI and the `langsmith-trace` skill (Pillar 1, section
+1.3.3). Claude Code was prompted to pull the last five traces from the
+`AgenticAI V2` project, parse the span hierarchy, and compare tokens,
+cost and latency per step. The agent returned **cost** and **latency**
+as the dominant issues.
 
-Cross-agent ranking and a dedicated insights UI or API are out of
-scope; see section 4.
+This is evidenced by the worked trace of 2026-05-13: a representative
+session cost 0.266 USD over 112.65 s across 4 LLM calls; the redundant
+second Extractor span (the "Double Call") alone accounted for about
+0.083 USD and about 24 s — roughly one third of the pipeline cost —
+with no information gain (Pillar 1, section 1.3.3). Cost and latency
+are thereby verified as the dominant, addressable issues directly
+against the trace material.
 
-## 2. Optimization
+Cross-agent ranking (top-K across all agents) and a dedicated insights
+UI or API are out of scope; see section 4.
 
-The levers below are fixed at design time and are justified directly
-by the Observability metrics. Each lever names the signal that
-motivates it and the corresponding framework optimization category.
+## 2. Applied Optimization Levers
 
-### 2.1 Performance Tuning
-
-- **Per-agent model routing.** The pipeline assigns the cheapest
-  adequate model per role: Haiku 4.5 for the Classifier, Sonnet 4.6
-  for the Extractor and the Control judge. The motivating signal is
-  the per-model cost and latency breakdown of Pillar 1, section 1.2
-  (model identity captured as `ls_model_name`). Routing the
-  low-complexity classification step to Haiku removes Sonnet-level
-  cost and latency from every run without measurable quality loss on
-  that step. This realises the framework's "model routing" and
-  "targeted model downgrade" levers as a fixed architectural decision.
-- **Bounded reasoning budget.** The cycle cap `MAX_TOOL_ROUNDS = 3`
-  (Pillar 1, section 1.3.2) caps worst-case cost and latency per run
-  and prevents unbounded tool-correction loops. This is the
-  "inference-time budget cap" lever applied statically.
-
-### 2.2 Agent flow and accuracy optimization
-
-The LLM-as-a-Judge confidence gate `overall_confidence >= 0.8`
-(Pillar 2, section 2.1) routes the agent flow: runs at or above the
-threshold complete autonomously (Human-Out-of-the-Loop), runs below it
-are escalated to human review (Human-on-the-Loop). This is an
-accuracy-versus-autonomy optimization decision, fixed at design time
-rather than tuned through a feedback loop. The Cost Cap and Latency
-Cap (Pillar 2, section 1.5) provide the production signal that would
-trigger a future retuning of these levers; they are configured and
-verified, but the retuning loop itself is out of scope (section 4).
-
-## 3. Applied Optimization Levers
-
-Section 1 covers insight access and section 2 the design-time levers.
-This section documents the optimization levers the pipeline applies,
-each traced to the Observability signal that motivated it and to its
-measured effect. Effects are stated as deltas against the pipeline's
-own necessary-work floor, the productive calls, rather than against an
+Section 1 covers insight access. This section documents the
+optimization levers the pipeline applies, each traced to the
+Observability signal that motivated it and to its measured effect.
+Effects are stated as deltas against the pipeline's own
+necessary-work floor, the productive calls, rather than against an
 external benchmark, consistent with the scope boundary of section 4.
 
 The motivating analysis:
@@ -111,6 +81,16 @@ The motivating analysis:
   the Cost and Latency Cap aggregates (Pillar 2, section 1.5) were
   computed over incomplete data. The LangChain callback tracer batches
   were not awaited on teardown.
+
+### Per-agent map
+
+- **Classifier** — Lever 3 (prompt caching).
+- **Extractor** — Lever 1 (terminal tool submission), Lever 3 (prompt
+  caching).
+- **Control (Judge)** — Lever 3 (prompt caching), Lever 4 (model
+  selection), Lever 5 (compact prompt), Lever 6 (minimal response).
+- **Pipeline-wide / infrastructure** — Lever 2 (deterministic trace
+  flush).
 
 ### Lever 1: Terminal tool submission in the Extractor
 
@@ -201,12 +181,12 @@ as a deliberate accuracy decision.
   judge `source_quote` fallback is dropped.
 - **Effect:** the per-field free text is removed from the judge
   response; the Control completion shrinks by roughly three quarters
-  (see the table below). The per-field judge audit text, internal-only
+  (see section 3). The per-field judge audit text, internal-only
   per Pillar 2 section 2.1, is no longer produced; the country prefill
   in the UI falls back to its existing note and value-normalisation
   path without breaking.
 
-### Measured effect
+## 3. Results
 
 The Control completion figures are directly attributable: the Control
 input (prompt) token count is essentially unchanged, so the completion
@@ -246,8 +226,8 @@ curated baseline dataset, and at single-digit run volume a
 feedback-driven loop would produce statistically insignificant
 deltas while incurring fixed build and maintenance cost.
 
-- **Continuous Improvement Loop.** The levers of section 2 are set
-  once at design time and are not yet re-derived from production
+- **Continuous Improvement Loop.** The applied levers of section 2 are
+  set once at design time and are not yet re-derived from production
   feedback against a committed baseline. Closing the loop is
   recoverable once a curated evaluation set and sufficient volume
   exist.
@@ -260,8 +240,8 @@ deltas while incurring fixed build and maintenance cost.
   search space to optimise.
 - **Insights: cross-agent top-K and dedicated UI/API.** The system is
   a single owned pipeline, so cross-agent ranking is not meaningful,
-  and issue insight is operated through the existing LangSmith UI and
-  CLI rather than a separate insights service.
+  and issue insight is operated via prompt through the existing
+  LangSmith CLI rather than a separate insights service.
 
 ## Reference to the Framework Table
 
