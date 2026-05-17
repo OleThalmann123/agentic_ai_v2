@@ -28,7 +28,7 @@ such.
 |---|---|---|---|
 | Insights | Find top-K issues for a specific agent | via prompt | 1.1 |
 | Insights | Find top-K issues across all agents | out-of-scope | 4 |
-| Insights | Find Root Cause for an identified issue | via prompt | 1.1 |
+| Insights | Find Root Cause for an identified issue | via prompt and manual research on LangSmith | 1.1 |
 | Insights | UI and API | out-of-scope | 4 |
 | Optimization | Applied levers (cost / latency) | implemented | 2 |
 | Optimization | Prompt and Context Tuning | out-of-scope | 4 |
